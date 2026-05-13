@@ -294,6 +294,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_batch_unassigned_count: {
+        Args: { _batch_id: string }
+        Returns: number
+      }
+      get_batch_unassigned_ids: {
+        Args: { _batch_id: string; _limit: number }
+        Returns: {
+          id: string
+        }[]
+      }
+      get_broker_lead_counts: {
+        Args: never
+        Returns: {
+          count: number
+          user_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

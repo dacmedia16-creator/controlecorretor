@@ -10,17 +10,22 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, FileText, Save, Eye, ListChecks } from "lucide-react";
+import { Upload, FileText, Save, Eye, ListChecks, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   type ParsedContact,
   formatPhoneDisplay,
-  normalizePhone,
   parseContactLine,
   parseCsv,
   validateBrazilianPhone,
 } from "@/lib/phone";
 import { formatDate } from "@/lib/constants";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+
+const MAX_ROWS = 10000;
+const MIN_BATCH_NAME = 3;
+const MAX_BATCH_NAME = 200;
+const CONFIRM_THRESHOLD = 100;
 
 export const Route = createFileRoute("/_authenticated/leads-em-massa")({
   component: BulkLeadsPage,
@@ -42,6 +47,9 @@ function BulkLeadsPage() {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: batches } = useQuery({
     queryKey: ["import-batches"],
@@ -57,56 +65,74 @@ function BulkLeadsPage() {
   if (role !== "admin") return <p className="text-muted-foreground">Acesso restrito ao administrador.</p>;
 
   async function buildPreview(rows: ParsedContact[]) {
-    // Dedup interno
-    const seen = new Set<string>();
-    const phones = rows.map((r) => r.normalized).filter(Boolean);
+    if (rows.length > MAX_ROWS) {
+      toast.error(`Limite de ${MAX_ROWS.toLocaleString("pt-BR")} linhas por importação. Divida o arquivo.`);
+      return;
+    }
+    setScanning(true);
+    try {
+      const seen = new Set<string>();
+      const phones = Array.from(new Set(rows.map((r) => r.normalized).filter(Boolean)));
 
-    // Verifica duplicados no banco
-    const existing = new Set<string>();
-    if (phones.length > 0) {
-      // chunks de 200 para evitar URL grande
+      // Verifica duplicados no banco em chunks, cedendo o thread entre eles
+      const existing = new Set<string>();
       for (let i = 0; i < phones.length; i += 200) {
         const chunk = phones.slice(i, i + 200);
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("leads")
           .select("phone_normalized")
           .in("phone_normalized", chunk);
+        if (error) throw error;
         (data ?? []).forEach((r: any) => r.phone_normalized && existing.add(r.phone_normalized));
+        await new Promise((r) => setTimeout(r, 0));
       }
+
+      const result: PreviewRow[] = rows.map((r) => {
+        const v = validateBrazilianPhone(r.normalized);
+        if (v === "invalid") {
+          return { ...r, status: "invalid", reason: "Telefone inválido", selected: false };
+        }
+        if (existing.has(r.normalized)) {
+          return { ...r, status: "duplicate", reason: "Já existe na base", selected: false };
+        }
+        if (seen.has(r.normalized)) {
+          return { ...r, status: "duplicate", reason: "Repetido na lista", selected: false };
+        }
+        seen.add(r.normalized);
+        return { ...r, status: "valid", selected: true };
+      });
+
+      setPreview(result);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao processar lista");
+    } finally {
+      setScanning(false);
     }
-
-    const result: PreviewRow[] = rows.map((r) => {
-      const v = validateBrazilianPhone(r.normalized);
-      if (v === "invalid") {
-        return { ...r, status: "invalid", reason: "Telefone inválido", selected: false };
-      }
-      if (existing.has(r.normalized)) {
-        return { ...r, status: "duplicate", reason: "Já existe na base", selected: false };
-      }
-      if (seen.has(r.normalized)) {
-        return { ...r, status: "duplicate", reason: "Repetido na lista", selected: false };
-      }
-      seen.add(r.normalized);
-      return { ...r, status: "valid", selected: true };
-    });
-
-    setPreview(result);
   }
 
   async function handleProcessText() {
     const lines = text.split(/\r?\n/);
+    if (lines.length > MAX_ROWS) {
+      toast.error(`Máximo ${MAX_ROWS.toLocaleString("pt-BR")} linhas por vez.`);
+      return;
+    }
     const parsed = lines.map(parseContactLine).filter((x): x is ParsedContact => !!x);
     if (parsed.length === 0) {
       toast.error("Nenhuma linha encontrada");
       return;
     }
     await buildPreview(parsed);
-    toast.success(`${parsed.length} linhas processadas`);
+    toast.success(`${parsed.length.toLocaleString("pt-BR")} linhas processadas`);
   }
 
   async function handleCsv(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx. 5MB)");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     const content = await file.text();
     const parsed = parseCsv(content);
     if (parsed.length === 0) {
@@ -114,7 +140,7 @@ function BulkLeadsPage() {
       return;
     }
     await buildPreview(parsed);
-    toast.success(`${parsed.length} linhas do CSV processadas`);
+    toast.success(`${parsed.length.toLocaleString("pt-BR")} linhas do CSV processadas`);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -137,21 +163,38 @@ function BulkLeadsPage() {
     };
   }, [preview]);
 
-  async function handleSave() {
+  function handleSaveClick() {
     if (!preview || !user) return;
-    if (!batchName.trim()) {
-      toast.error("Informe o nome do lote");
+    const trimmed = batchName.trim();
+    if (trimmed.length < MIN_BATCH_NAME) {
+      toast.error(`O nome do lote precisa ter pelo menos ${MIN_BATCH_NAME} caracteres`);
+      return;
+    }
+    if (trimmed.length > MAX_BATCH_NAME) {
+      toast.error(`O nome do lote deve ter no máximo ${MAX_BATCH_NAME} caracteres`);
       return;
     }
     const toImport = preview.filter((r) => r.selected && r.status === "valid");
     if (toImport.length === 0) {
-      toast.error("Nenhum lead selecionado");
+      toast.error("Nenhum lead válido selecionado");
       return;
     }
+    if (toImport.length >= CONFIRM_THRESHOLD) {
+      setConfirmOpen(true);
+    } else {
+      void handleSave();
+    }
+  }
+
+  async function handleSave() {
+    setConfirmOpen(false);
+    if (!preview || !user) return;
+    const toImport = preview.filter((r) => r.selected && r.status === "valid");
+    if (toImport.length === 0) return;
 
     setSaving(true);
+    setProgress({ done: 0, total: toImport.length });
     try {
-      // Buscar status "Novo lead"
       const { data: statuses } = await supabase
         .from("kanban_statuses")
         .select("id,name,position")
@@ -160,7 +203,6 @@ function BulkLeadsPage() {
       const novoLead =
         statuses?.find((s) => s.name.toLowerCase().includes("novo")) ?? statuses?.[0] ?? null;
 
-      // Cria o lote
       const { data: batch, error: bErr } = await supabase
         .from("lead_import_batches")
         .insert({
@@ -176,25 +218,27 @@ function BulkLeadsPage() {
         .single();
       if (bErr || !batch) throw bErr ?? new Error("Falha ao criar lote");
 
-      // Insert em chunks
       const rows = toImport.map((r) => ({
-        name: r.name?.trim() || "Lead sem nome",
+        name: (r.name?.trim() || "Lead sem nome").slice(0, 200),
         phone: r.normalized,
-        city: r.city || null,
-        neighborhood: r.neighborhood || null,
-        source: r.source || "Importação em massa",
-        general_notes: r.notes || null,
+        city: r.city ? r.city.slice(0, 120) : null,
+        neighborhood: r.neighborhood ? r.neighborhood.slice(0, 120) : null,
+        source: (r.source || "Importação em massa").slice(0, 120),
+        general_notes: r.notes ? r.notes.slice(0, 1000) : null,
         status_id: novoLead?.id ?? null,
         created_by_user_id: user.id,
         import_batch_id: batch.id,
       }));
 
       let imported = 0;
-      for (let i = 0; i < rows.length; i += 500) {
-        const chunk = rows.slice(i, i + 500);
+      const CHUNK = 250;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
         const { error, count } = await supabase.from("leads").insert(chunk, { count: "exact" });
         if (error) throw error;
         imported += count ?? chunk.length;
+        setProgress({ done: imported, total: rows.length });
+        await new Promise((r) => setTimeout(r, 0));
       }
 
       await supabase
@@ -202,7 +246,7 @@ function BulkLeadsPage() {
         .update({ imported_count: imported })
         .eq("id", batch.id);
 
-      toast.success(`${imported} leads importados`);
+      toast.success(`${imported.toLocaleString("pt-BR")} leads importados com sucesso`);
       qc.invalidateQueries({ queryKey: ["import-batches"] });
       qc.invalidateQueries({ queryKey: ["leads-admin"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -214,6 +258,7 @@ function BulkLeadsPage() {
       toast.error(e?.message ?? "Erro ao salvar");
     } finally {
       setSaving(false);
+      setProgress(null);
     }
   }
 
@@ -252,8 +297,9 @@ function BulkLeadsPage() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
-                <Button className="mt-2" onClick={handleProcessText} disabled={!text.trim()}>
-                  <Eye className="mr-2 size-4" /> Processar lista
+                <Button className="mt-2" onClick={handleProcessText} disabled={!text.trim() || scanning}>
+                  {scanning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Eye className="mr-2 size-4" />}
+                  {scanning ? "Verificando…" : "Processar lista"}
                 </Button>
               </div>
 
@@ -298,10 +344,17 @@ function BulkLeadsPage() {
                     />
                     <span className="text-sm">Selecionar todos os válidos</span>
                   </div>
-                  <Button onClick={handleSave} disabled={saving || summary.selected === 0}>
-                    <Save className="mr-2 size-4" />
-                    {saving ? "Importando…" : `Importar ${summary.selected} leads`}
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    {progress && (
+                      <span className="text-xs text-muted-foreground">
+                        {progress.done.toLocaleString("pt-BR")} / {progress.total.toLocaleString("pt-BR")}
+                      </span>
+                    )}
+                    <Button onClick={handleSaveClick} disabled={saving || summary.selected === 0}>
+                      {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                      {saving ? "Importando…" : `Importar ${summary.selected} leads`}
+                    </Button>
+                  </div>
                 </div>
                 <div className="max-h-[480px] overflow-auto">
                   <table className="w-full text-sm">
@@ -384,6 +437,22 @@ function BulkLeadsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Confirmar importação"
+        description={
+          <span>
+            Você está prestes a importar{" "}
+            <strong>{summary?.selected.toLocaleString("pt-BR") ?? 0}</strong> leads no lote{" "}
+            <strong>"{batchName.trim()}"</strong>. Confirme antes de prosseguir.
+          </span>
+        }
+        confirmLabel="Importar"
+        loading={saving}
+        onConfirm={handleSave}
+      />
     </div>
   );
 }
