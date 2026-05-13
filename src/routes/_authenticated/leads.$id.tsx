@@ -66,12 +66,25 @@ function LeadDetail() {
     else { toast.success("Status atualizado"); qc.invalidateQueries({ queryKey: ["lead", id] }); }
   }
 
+  const wantedKanban = data.isBulk ? "bulk_leads" : "general";
+  const statusesForLead = data.statuses.filter((s: any) => s.kanban_type === wantedKanban);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Link to="/leads"><Button variant="ghost" size="icon"><ArrowLeft className="size-4" /></Button></Link>
         <h1 className="text-xl font-bold">{lead.name}</h1>
         {status && <Badge style={{ backgroundColor: status.color, color: "white" }}>{status.name}</Badge>}
+        <Badge variant={data.isBulk ? "default" : "secondary"}>
+          {data.isBulk ? "Lead em massa" : "Lead normal"}
+        </Badge>
+        {data.isBulk && data.batch && (
+          <span className="text-xs text-muted-foreground">
+            Lote: <span className="font-medium text-foreground">{data.batch.name}</span>
+            {" · "}importado em {formatDate(data.batch.created_at)}
+            {" · "}Kanban: Leads em Massa
+          </span>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
