@@ -40,7 +40,7 @@ export async function fetchBulkAssignedStatusId(): Promise<string | null> {
 /** Aplica várias atribuições agrupando por corretor. */
 export async function applyAssignments(
   assignments: { id: string; userId: string }[],
-  opts?: { onProgress?: (done: number, total: number) => void },
+  opts?: { onProgress?: (done: number, total: number) => void; statusId?: string | null },
 ) {
   if (assignments.length === 0) return;
   const byUser = new Map<string, string[]>();
@@ -53,6 +53,7 @@ export async function applyAssignments(
   let done = 0;
   for (const [userId, ids] of byUser) {
     await assignLeadsInChunks(ids, userId, {
+      statusId: opts?.statusId ?? null,
       onProgress: (d) => opts?.onProgress?.(done + d, total),
     });
     done += ids.length;
