@@ -186,6 +186,64 @@ function Dashboard() {
           </table>
         </div>
       </Card>
+
+      <div>
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+          <Upload className="size-5" /> Leads em Massa
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {bulkCards.map((c) => (
+            <Card key={c.label} className="p-4">
+              <div className="text-sm text-muted-foreground">{c.label}</div>
+              <div className="mt-1 text-2xl font-bold">{c.value}</div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      <Card className="p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Users className="size-5" />
+          <h2 className="font-semibold">Desempenho por corretor — Leads em Massa</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-muted-foreground">
+                <th className="py-2 pr-4">Corretor</th>
+                <th className="py-2 pr-4">Recebidos</th>
+                <th className="py-2 pr-4">Trabalhados</th>
+                <th className="py-2 pr-4">WhatsApps</th>
+                <th className="py-2 pr-4">Responderam</th>
+                <th className="py-2 pr-4">Interessados</th>
+                <th className="py-2 pr-4">Captados</th>
+                <th className="py-2 pr-4">Taxa resp.</th>
+                <th className="py-2 pr-4">Taxa cap.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perBrokerBulk.map((b) => (
+                <tr key={b.id} className="border-b last:border-0">
+                  <td className="py-2 pr-4 font-medium">{b.name}</td>
+                  <td className="py-2 pr-4">{b.recebidos}</td>
+                  <td className="py-2 pr-4">{b.trabalhados}</td>
+                  <td className="py-2 pr-4">{b.whats}</td>
+                  <td className="py-2 pr-4">{b.responderam}</td>
+                  <td className="py-2 pr-4">{b.interessados}</td>
+                  <td className="py-2 pr-4">{b.captados}</td>
+                  <td className="py-2 pr-4">{b.respRate}%</td>
+                  <td className="py-2 pr-4">{b.capRate}%</td>
+                </tr>
+              ))}
+              {perBrokerBulk.length === 0 && (
+                <tr><td colSpan={9} className="py-6 text-center text-muted-foreground">
+                  Sem dados ainda.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
