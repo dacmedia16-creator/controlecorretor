@@ -41,6 +41,33 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_distributions: {
+        Row: {
+          admin_id: string
+          batch_id: string | null
+          created_at: string
+          details: Json
+          id: string
+          total_distributed: number
+        }
+        Insert: {
+          admin_id: string
+          batch_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          total_distributed?: number
+        }
+        Update: {
+          admin_id?: string
+          batch_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          total_distributed?: number
+        }
+        Relationships: []
+      }
       lead_import_batches: {
         Row: {
           created_at: string
