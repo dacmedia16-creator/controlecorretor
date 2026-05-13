@@ -35,11 +35,14 @@ function KanbanPage() {
     queryKey: ["kanban", user?.id, role],
     enabled: !!user,
     queryFn: async () => {
-      let q = supabase.from("leads").select("id,name,phone,status_id,assigned_to_user_id,import_batch_id,updated_at");
+      let q = supabase
+        .from("leads")
+        .select("id,name,phone,status_id,assigned_to_user_id,import_batch_id,updated_at")
+        .is("import_batch_id", null);
       if (role === "corretor") q = q.or(`assigned_to_user_id.eq.${user!.id},created_by_user_id.eq.${user!.id}`);
       const [leads, statuses, brokers, lastInter, batches] = await Promise.all([
         q.order("updated_at", { ascending: false }),
-        supabase.from("kanban_statuses").select("id,name,color,position").eq("active", true).order("position"),
+        supabase.from("kanban_statuses").select("id,name,color,position").eq("active", true).eq("kanban_type", "general").order("position"),
         supabase.from("profiles").select("id,name"),
         supabase.from("lead_interactions").select("lead_id, created_at, next_follow_up_date").order("created_at", { ascending: false }),
         supabase.from("lead_import_batches").select("id,name").order("created_at", { ascending: false }),
