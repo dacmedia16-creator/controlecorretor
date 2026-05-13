@@ -29,7 +29,7 @@ function MyLeadsPage() {
     queryFn: async () => {
       const [leads, statuses] = await Promise.all([
         supabase.from("leads").select("*").or(`assigned_to_user_id.eq.${user!.id},created_by_user_id.eq.${user!.id}`).order("updated_at", { ascending: false }),
-        supabase.from("kanban_statuses").select("id,name,color").order("position"),
+        supabase.from("kanban_statuses").select("id,name,color,kanban_type").eq("active", true).order("position"),
       ]);
       return { leads: leads.data ?? [], statuses: statuses.data ?? [] };
     },
