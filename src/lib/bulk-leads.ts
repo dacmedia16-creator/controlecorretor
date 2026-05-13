@@ -1,18 +1,20 @@
 import { supabase } from "@/integrations/supabase/client";
 
-/** Atualiza o broker responsável de N leads em lotes, evitando travar a UI. */
+/** Atualiza o broker responsável (e opcionalmente o status) de N leads em lotes. */
 export async function assignLeadsInChunks(
   ids: string[],
   userId: string,
-  opts?: { chunkSize?: number; onProgress?: (done: number, total: number) => void },
+  opts?: { chunkSize?: number; statusId?: string | null; onProgress?: (done: number, total: number) => void },
 ) {
   const chunkSize = opts?.chunkSize ?? 200;
   let done = 0;
   for (let i = 0; i < ids.length; i += chunkSize) {
     const chunk = ids.slice(i, i + chunkSize);
+    const update: Record<string, any> = { assigned_to_user_id: userId };
+    if (opts?.statusId) update.status_id = opts.statusId;
     const { error } = await supabase
       .from("leads")
-      .update({ assigned_to_user_id: userId })
+      .update(update)
       .in("id", chunk);
     if (error) throw error;
     done += chunk.length;
@@ -20,6 +22,18 @@ export async function assignLeadsInChunks(
     // Cede o thread para manter a UI responsiva
     await new Promise((r) => setTimeout(r, 0));
   }
+}
+
+/** Busca o id do status "Distribuído para corretor" do Kanban Leads em Massa. */
+export async function fetchBulkAssignedStatusId(): Promise<string | null> {
+  const { data } = await supabase
+    .from("kanban_statuses")
+    .select("id,name")
+    .eq("kanban_type", "bulk_leads")
+    .eq("active", true);
+  const list = data ?? [];
+  const exact = list.find((s: any) => s.name === "Distribuído para corretor");
+  return exact?.id ?? null;
 }
 
 /** Aplica várias atribuições agrupando por corretor. */
