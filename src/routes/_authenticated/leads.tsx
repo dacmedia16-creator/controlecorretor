@@ -27,19 +27,19 @@ function LeadsPage() {
   const [fStatus, setFStatus] = useState("all");
   const [fCity, setFCity] = useState("");
   const [fSource, setFSource] = useState("all");
-  const [fBatch, setFBatch] = useState("all");
   const [fSearch, setFSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads-admin"],
     queryFn: async () => {
-      const [leads, brokers, statuses, batches] = await Promise.all([
-        supabase.from("leads").select("*").order("created_at", { ascending: false }),
+      const [leads, brokers, statuses] = await Promise.all([
+        // Apenas leads manuais (não importados em massa)
+        supabase.from("leads").select("*").is("import_batch_id", null).order("created_at", { ascending: false }),
         supabase.from("profiles").select("id,name"),
-        supabase.from("kanban_statuses").select("id,name,color").order("position"),
-        supabase.from("lead_import_batches").select("id,name").order("created_at", { ascending: false }),
+        supabase.from("kanban_statuses").select("id,name,color")
+          .eq("active", true).eq("kanban_type", "general").order("position"),
       ]);
-      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [], batches: batches.data ?? [] };
+      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [] };
     },
   });
 
