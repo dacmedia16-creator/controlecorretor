@@ -125,7 +125,7 @@ function LeadDetail() {
             <Select value={lead.status_id ?? ""} onValueChange={changeStatus}>
               <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
               <SelectContent>
-                {data.statuses.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {statusesForLead.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
