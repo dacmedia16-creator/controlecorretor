@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedMeusLeadsRouteImport } from './routes/_authenticated/meus-leads'
 import { Route as AuthenticatedLeadsEmMassaRouteImport } from './routes/_authenticated/leads-em-massa'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
+import { Route as AuthenticatedKanbanMassaRouteImport } from './routes/_authenticated/kanban-massa'
 import { Route as AuthenticatedKanbanRouteImport } from './routes/_authenticated/kanban'
 import { Route as AuthenticatedDistribuicaoRouteImport } from './routes/_authenticated/distribuicao'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -53,6 +54,12 @@ const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedKanbanMassaRoute =
+  AuthenticatedKanbanMassaRouteImport.update({
+    id: '/kanban-massa',
+    path: '/kanban-massa',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedKanbanRoute = AuthenticatedKanbanRouteImport.update({
   id: '/kanban',
   path: '/kanban',
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/distribuicao': typeof AuthenticatedDistribuicaoRoute
   '/kanban': typeof AuthenticatedKanbanRoute
+  '/kanban-massa': typeof AuthenticatedKanbanMassaRoute
   '/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/leads-em-massa': typeof AuthenticatedLeadsEmMassaRouteWithChildren
   '/meus-leads': typeof AuthenticatedMeusLeadsRoute
@@ -113,6 +121,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/distribuicao': typeof AuthenticatedDistribuicaoRoute
   '/kanban': typeof AuthenticatedKanbanRoute
+  '/kanban-massa': typeof AuthenticatedKanbanMassaRoute
   '/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/leads-em-massa': typeof AuthenticatedLeadsEmMassaRouteWithChildren
   '/meus-leads': typeof AuthenticatedMeusLeadsRoute
@@ -129,6 +138,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/distribuicao': typeof AuthenticatedDistribuicaoRoute
   '/_authenticated/kanban': typeof AuthenticatedKanbanRoute
+  '/_authenticated/kanban-massa': typeof AuthenticatedKanbanMassaRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/_authenticated/leads-em-massa': typeof AuthenticatedLeadsEmMassaRouteWithChildren
   '/_authenticated/meus-leads': typeof AuthenticatedMeusLeadsRoute
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/distribuicao'
     | '/kanban'
+    | '/kanban-massa'
     | '/leads'
     | '/leads-em-massa'
     | '/meus-leads'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/distribuicao'
     | '/kanban'
+    | '/kanban-massa'
     | '/leads'
     | '/leads-em-massa'
     | '/meus-leads'
@@ -174,6 +186,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/distribuicao'
     | '/_authenticated/kanban'
+    | '/_authenticated/kanban-massa'
     | '/_authenticated/leads'
     | '/_authenticated/leads-em-massa'
     | '/_authenticated/meus-leads'
@@ -230,6 +243,13 @@ declare module '@tanstack/react-router' {
       path: '/leads'
       fullPath: '/leads'
       preLoaderRoute: typeof AuthenticatedLeadsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/kanban-massa': {
+      id: '/_authenticated/kanban-massa'
+      path: '/kanban-massa'
+      fullPath: '/kanban-massa'
+      preLoaderRoute: typeof AuthenticatedKanbanMassaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/kanban': {
@@ -315,6 +335,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDistribuicaoRoute: typeof AuthenticatedDistribuicaoRoute
   AuthenticatedKanbanRoute: typeof AuthenticatedKanbanRoute
+  AuthenticatedKanbanMassaRoute: typeof AuthenticatedKanbanMassaRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRouteWithChildren
   AuthenticatedLeadsEmMassaRoute: typeof AuthenticatedLeadsEmMassaRouteWithChildren
   AuthenticatedMeusLeadsRoute: typeof AuthenticatedMeusLeadsRoute
@@ -326,6 +347,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDistribuicaoRoute: AuthenticatedDistribuicaoRoute,
   AuthenticatedKanbanRoute: AuthenticatedKanbanRoute,
+  AuthenticatedKanbanMassaRoute: AuthenticatedKanbanMassaRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRouteWithChildren,
   AuthenticatedLeadsEmMassaRoute: AuthenticatedLeadsEmMassaRouteWithChildren,
   AuthenticatedMeusLeadsRoute: AuthenticatedMeusLeadsRoute,
@@ -344,3 +366,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
