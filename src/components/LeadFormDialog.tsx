@@ -52,7 +52,9 @@ export function LeadFormDialog({
 
   useEffect(() => {
     if (!open) return;
-    supabase.from("kanban_statuses").select("id,name,position").eq("active", true).order("position")
+    // Cadastro manual: somente status do Kanban geral
+    supabase.from("kanban_statuses").select("id,name,position")
+      .eq("active", true).eq("kanban_type", "general").order("position")
       .then(({ data }) => setStatuses(data ?? []));
     if (isAdmin) {
       supabase.from("profiles").select("id,name").eq("active", true).order("name")
