@@ -10,6 +10,7 @@ type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles:
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"] },
   { to: "/leads", label: "Leads", icon: ListChecks, roles: ["admin"] },
+  { to: "/leads-em-massa", label: "Leads em Massa", icon: Upload, roles: ["admin"] },
   { to: "/meus-leads", label: "Meus Leads", icon: Briefcase, roles: ["corretor"] },
   { to: "/kanban", label: "Kanban", icon: Trello, roles: ["admin", "corretor"] },
   { to: "/corretores", label: "Corretores", icon: Users, roles: ["admin"] },
