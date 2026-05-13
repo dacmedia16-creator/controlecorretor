@@ -94,6 +94,40 @@ function Dashboard() {
     };
   });
 
+  // Per-broker performance — bulk leads
+  const bulkStatusId = (n: string) => bulkStatuses.find((s: any) => s.name === n)?.id;
+  const idMandou = bulkStatusId("Mandou WhatsApp");
+  const idResp = bulkStatusId("Respondeu");
+  const idInter = bulkStatusId("Interessado");
+  const idCaptado = bulkStatusId("Imóvel captado");
+  const idPrim = bulkStatusId("Primeira tentativa");
+  const respondedSet = new Set([idResp, idInter, idCaptado, bulkStatusId("Possível captação"), bulkStatusId("Agendar retorno")].filter(Boolean));
+  const workedSet = new Set(
+    [idPrim, idMandou, ...respondedSet, bulkStatusId("Não atendeu"), bulkStatusId("Aguardando resposta")].filter(Boolean),
+  );
+
+  const perBrokerBulk = data.brokers.map((b) => {
+    const my = bulkLeads.filter((l) => l.assigned_to_user_id === b.id);
+    const recebidos = my.length;
+    const trabalhados = my.filter((l) => workedSet.has(l.status_id ?? "")).length;
+    const whats = my.filter((l) => l.status_id === idMandou).length;
+    const responderam = my.filter((l) => respondedSet.has(l.status_id ?? "")).length;
+    const interessados = my.filter((l) => l.status_id === idInter).length;
+    const captados = my.filter((l) => l.status_id === idCaptado).length;
+    return {
+      id: b.id,
+      name: b.name,
+      recebidos,
+      trabalhados,
+      whats,
+      responderam,
+      interessados,
+      captados,
+      respRate: recebidos ? Math.round((responderam / recebidos) * 100) : 0,
+      capRate: recebidos ? Math.round((captados / recebidos) * 100) : 0,
+    };
+  });
+
   return (
     <div className="space-y-6">
       <div>
