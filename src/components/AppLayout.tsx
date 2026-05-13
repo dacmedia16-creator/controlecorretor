@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload } from "lucide-react";
+import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -11,6 +11,7 @@ const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"] },
   { to: "/leads", label: "Leads", icon: ListChecks, roles: ["admin"] },
   { to: "/leads-em-massa", label: "Leads em Massa", icon: Upload, roles: ["admin"] },
+  { to: "/distribuicao", label: "Distribuição", icon: Shuffle, roles: ["admin"] },
   { to: "/meus-leads", label: "Meus Leads", icon: Briefcase, roles: ["corretor"] },
   { to: "/kanban", label: "Kanban", icon: Trello, roles: ["admin", "corretor"] },
   { to: "/corretores", label: "Corretores", icon: Users, roles: ["admin"] },
