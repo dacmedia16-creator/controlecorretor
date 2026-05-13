@@ -14,16 +14,220 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      kanban_statuses: {
+        Row: {
+          active: boolean
+          color: string
+          created_at: string
+          id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          active?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          position: number
+        }
+        Update: {
+          active?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+        }
+        Relationships: []
+      }
+      lead_interactions: {
+        Row: {
+          created_at: string
+          id: string
+          interaction_result: string | null
+          interaction_type: string
+          lead_id: string
+          next_follow_up_date: string | null
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interaction_result?: string | null
+          interaction_type: string
+          lead_id: string
+          next_follow_up_date?: string | null
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interaction_result?: string | null
+          interaction_type?: string
+          lead_id?: string
+          next_follow_up_date?: string | null
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_interactions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_interactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          assigned_to_user_id: string | null
+          city: string | null
+          created_at: string
+          created_by_user_id: string
+          email: string | null
+          general_notes: string | null
+          id: string
+          interest_type: string | null
+          name: string
+          neighborhood: string | null
+          phone: string | null
+          property_type: string | null
+          source: string | null
+          status_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to_user_id?: string | null
+          city?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          email?: string | null
+          general_notes?: string | null
+          id?: string
+          interest_type?: string | null
+          name: string
+          neighborhood?: string | null
+          phone?: string | null
+          property_type?: string | null
+          source?: string | null
+          status_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to_user_id?: string | null
+          city?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          email?: string | null
+          general_notes?: string | null
+          id?: string
+          interest_type?: string | null
+          name?: string
+          neighborhood?: string | null
+          phone?: string | null
+          property_type?: string | null
+          source?: string | null
+          status_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_assigned_to_user_id_fkey"
+            columns: ["assigned_to_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_statuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          active: boolean
+          created_at: string
+          email: string
+          id: string
+          name: string
+          phone: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          email: string
+          id: string
+          name?: string
+          phone?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "corretor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +354,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "corretor"],
+    },
   },
 } as const
