@@ -163,21 +163,38 @@ function BulkLeadsPage() {
     };
   }, [preview]);
 
-  async function handleSave() {
+  function handleSaveClick() {
     if (!preview || !user) return;
-    if (!batchName.trim()) {
-      toast.error("Informe o nome do lote");
+    const trimmed = batchName.trim();
+    if (trimmed.length < MIN_BATCH_NAME) {
+      toast.error(`O nome do lote precisa ter pelo menos ${MIN_BATCH_NAME} caracteres`);
+      return;
+    }
+    if (trimmed.length > MAX_BATCH_NAME) {
+      toast.error(`O nome do lote deve ter no máximo ${MAX_BATCH_NAME} caracteres`);
       return;
     }
     const toImport = preview.filter((r) => r.selected && r.status === "valid");
     if (toImport.length === 0) {
-      toast.error("Nenhum lead selecionado");
+      toast.error("Nenhum lead válido selecionado");
       return;
     }
+    if (toImport.length >= CONFIRM_THRESHOLD) {
+      setConfirmOpen(true);
+    } else {
+      void handleSave();
+    }
+  }
+
+  async function handleSave() {
+    setConfirmOpen(false);
+    if (!preview || !user) return;
+    const toImport = preview.filter((r) => r.selected && r.status === "valid");
+    if (toImport.length === 0) return;
 
     setSaving(true);
+    setProgress({ done: 0, total: toImport.length });
     try {
-      // Buscar status "Novo lead"
       const { data: statuses } = await supabase
         .from("kanban_statuses")
         .select("id,name,position")
@@ -186,7 +203,6 @@ function BulkLeadsPage() {
       const novoLead =
         statuses?.find((s) => s.name.toLowerCase().includes("novo")) ?? statuses?.[0] ?? null;
 
-      // Cria o lote
       const { data: batch, error: bErr } = await supabase
         .from("lead_import_batches")
         .insert({
@@ -202,25 +218,27 @@ function BulkLeadsPage() {
         .single();
       if (bErr || !batch) throw bErr ?? new Error("Falha ao criar lote");
 
-      // Insert em chunks
       const rows = toImport.map((r) => ({
-        name: r.name?.trim() || "Lead sem nome",
+        name: (r.name?.trim() || "Lead sem nome").slice(0, 200),
         phone: r.normalized,
-        city: r.city || null,
-        neighborhood: r.neighborhood || null,
-        source: r.source || "Importação em massa",
-        general_notes: r.notes || null,
+        city: r.city ? r.city.slice(0, 120) : null,
+        neighborhood: r.neighborhood ? r.neighborhood.slice(0, 120) : null,
+        source: (r.source || "Importação em massa").slice(0, 120),
+        general_notes: r.notes ? r.notes.slice(0, 1000) : null,
         status_id: novoLead?.id ?? null,
         created_by_user_id: user.id,
         import_batch_id: batch.id,
       }));
 
       let imported = 0;
-      for (let i = 0; i < rows.length; i += 500) {
-        const chunk = rows.slice(i, i + 500);
+      const CHUNK = 250;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
         const { error, count } = await supabase.from("leads").insert(chunk, { count: "exact" });
         if (error) throw error;
         imported += count ?? chunk.length;
+        setProgress({ done: imported, total: rows.length });
+        await new Promise((r) => setTimeout(r, 0));
       }
 
       await supabase
@@ -228,7 +246,7 @@ function BulkLeadsPage() {
         .update({ imported_count: imported })
         .eq("id", batch.id);
 
-      toast.success(`${imported} leads importados`);
+      toast.success(`${imported.toLocaleString("pt-BR")} leads importados com sucesso`);
       qc.invalidateQueries({ queryKey: ["import-batches"] });
       qc.invalidateQueries({ queryKey: ["leads-admin"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
@@ -240,6 +258,7 @@ function BulkLeadsPage() {
       toast.error(e?.message ?? "Erro ao salvar");
     } finally {
       setSaving(false);
+      setProgress(null);
     }
   }
 
