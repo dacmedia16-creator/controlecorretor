@@ -36,7 +36,8 @@ function KanbanSettingsPage() {
   }
 
   async function move(idx: number, dir: -1 | 1) {
-    const a = data[idx], b = data[idx + dir];
+    const list = data ?? [];
+    const a = list[idx], b = list[idx + dir];
     if (!a || !b) return;
     await Promise.all([
       supabase.from("kanban_statuses").update({ position: b.position }).eq("id", a.id),
@@ -47,7 +48,7 @@ function KanbanSettingsPage() {
 
   async function add() {
     if (!name.trim()) return;
-    const maxPos = Math.max(0, ...data.map((s) => s.position));
+    const maxPos = Math.max(0, ...(data ?? []).map((s) => s.position));
     const { error } = await supabase.from("kanban_statuses").insert({ name: name.trim(), color, position: maxPos + 1 });
     if (error) toast.error(error.message);
     else { setName(""); qc.invalidateQueries({ queryKey: ["statuses-admin"] }); }
