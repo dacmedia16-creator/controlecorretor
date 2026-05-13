@@ -106,14 +106,6 @@ function LeadsPage() {
               {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={fBatch} onValueChange={setFBatch}>
-            <SelectTrigger><SelectValue placeholder="Lote" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os lotes</SelectItem>
-              <SelectItem value="_none_">Sem lote</SelectItem>
-              {data?.batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
         </div>
       </Card>
 
