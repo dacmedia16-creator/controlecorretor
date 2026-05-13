@@ -1,90 +1,120 @@
-# BrokerFlow CRM — Plano de Implementação
+# Módulo "Leads em Massa"
 
-CRM imobiliário responsivo com dois perfis (administrador e corretor), gestão de leads, Kanban editável, histórico de interações e gestão de corretores. Backend via **Lovable Cloud** (Postgres + Auth + RLS).
+Novo módulo administrativo para importar grandes listas de contatos (texto colado ou CSV), revisar uma prévia validada, salvar em lote e distribuir os leads entre os corretores.
 
-## Stack
-- Frontend: TanStack Start + React 19 + Tailwind v4 + shadcn/ui
-- Backend: Lovable Cloud (Postgres, Auth email/senha, RLS)
-- Drag & drop Kanban: `@dnd-kit/core`
-- Estado servidor: TanStack Query
+## 1. Banco de dados (migration)
 
-## Estrutura de telas / rotas
-- `/login` — login email+senha; redireciona por papel
-- `/_authenticated` — guard de sessão + carrega papel
-  - `/dashboard` — admin only (cards + tabela desempenho)
-  - `/leads` — admin (tabela completa com filtros)
-  - `/leads/$id` — detalhes + histórico (admin e corretor dono)
-  - `/kanban` — Kanban (admin vê tudo, corretor só seus)
-  - `/meus-leads` — visão do corretor (lista + ações rápidas)
-  - `/corretores` — admin (CRUD corretores)
-  - `/configuracoes/kanban` — admin (CRUD etapas, cor, ordem, ativo)
+Nova tabela `lead_import_batches`:
+- `id`, `name`, `total_rows`, `valid_count`, `invalid_count`, `duplicate_count`, `imported_count`, `created_by_user_id`, `created_at`
 
-## Layout
-- Sidebar fixa no desktop (shadcn sidebar), bottom nav no mobile
-- Header com perfil + logout
-- Mobile-first nas telas do corretor
+Alteração em `leads`:
+- Adicionar `import_batch_id uuid` (FK para `lead_import_batches`, nullable, ON DELETE SET NULL)
+- Adicionar índice em `phone_normalized` (nova coluna `text` gerada/preenchida) para deduplicação rápida
+- Backfill `phone_normalized` a partir do `phone` existente
 
-## Banco de dados (Lovable Cloud)
+RLS:
+- `lead_import_batches`: admin tem acesso total; corretor pode ler apenas lotes que contenham leads atribuídos a ele (via EXISTS em `leads`)
+- Manter políticas atuais de `leads` intactas
 
-Tabela separada de papéis (segurança):
-```
-app_role enum: 'admin' | 'corretor'
-user_roles(id, user_id→auth.users, role, unique(user_id, role))
-has_role(uid, role) SECURITY DEFINER
-```
+Trigger:
+- Atualizar contadores do lote (`imported_count`) quando leads forem inseridos com `import_batch_id`
 
-Tabelas de domínio:
-- `profiles(id=auth.users.id, name, email, phone, active, created_at)` — auto-criada via trigger no signup
-- `kanban_statuses(id, name, position, color, active, created_at)` — seed com os 10 status pedidos
-- `leads(id, name, phone, email, city, neighborhood, property_type, interest_type, source, assigned_to_user_id, status_id→kanban_statuses, general_notes, created_by_user_id, created_at, updated_at)` — trigger updated_at
-- `lead_interactions(id, lead_id, user_id, interaction_type, interaction_result, notes, next_follow_up_date, created_at)`
+## 2. Menu lateral
 
-### RLS (resumo)
-- `profiles`: admin lê todos; corretor lê o próprio; admin escreve
-- `kanban_statuses`: todos autenticados leem; só admin escreve
-- `leads`:
-  - SELECT: admin OU `assigned_to_user_id = auth.uid()` OU `created_by_user_id = auth.uid()`
-  - INSERT: qualquer autenticado (corretor força `assigned_to_user_id = auth.uid()` no client; admin livre)
-  - UPDATE: admin (qualquer campo) OU corretor dono (apenas `status_id`, `general_notes`)
-  - DELETE: só admin
-- `lead_interactions`:
-  - SELECT: admin OU usuário com acesso ao lead
-  - INSERT: usuário com acesso ao lead; `user_id = auth.uid()`
+Adicionar item em `AppLayout.tsx`:
+- "Leads em Massa" → `/leads-em-massa`, ícone `Upload`, role `admin` somente
 
-## Funcionalidades-chave
+## 3. Nova rota `/_authenticated/leads-em-massa.tsx`
 
-**Login** — Supabase auth (email/senha). Após login, busca papel em `user_roles` e redireciona: admin → `/dashboard`, corretor → `/meus-leads`.
+Estrutura em abas (Tabs do shadcn):
+- **Importar** — colar texto, upload CSV, prévia, salvar
+- **Lotes** — lista dos lotes importados
 
-**Dashboard admin** — 7 cards de contagem (queries agregadas por status) + tabela desempenho por corretor (joins agrupados).
+### Aba Importar
+- Campo "Nome do lote" (obrigatório)
+- `Textarea` grande para colar contatos (suporta vários formatos)
+- Input file `.csv` (parser simples, primeira linha = cabeçalho)
+- Botão "Processar lista" → roda parser + validador localmente (cliente)
+- Card com resumo: total / válidos / inválidos / duplicados / selecionados
+- Tabela de prévia com checkbox por linha: nome, telefone original, telefone padronizado, status (Válido/Inválido/Duplicado), observação
+- Botão "Importar selecionados" → chama server function
 
-**Leads (admin)** — DataTable com filtros (corretor, status, cidade, origem, intervalo de datas), paginação client-side, ações: criar/editar/excluir/atribuir/mudar status/ver histórico (sheet lateral).
+### Aba Lotes
+- Tabela de `lead_import_batches`: nome, data, total, importados, inválidos, duplicados, criado por
+- Clique no lote → navega para `/leads-em-massa/$batchId`
 
-**Kanban** — colunas dinâmicas a partir de `kanban_statuses` ativos ordenados por `position`. Drag & drop com `@dnd-kit`; ao soltar, update otimista do `status_id` + cria interação automática "mudança de status". Card mostra: nome, telefone, corretor, status (cor), última interação, próximo retorno.
+## 4. Rota `/_authenticated/leads-em-massa.$batchId.tsx`
+- Cabeçalho do lote com contadores
+- Lista dos leads do lote (filtro por status / corretor)
+- Painel "Distribuir":
+  - Selecionar corretor específico (todos sem responsável OU apenas selecionados)
+  - "Distribuir igualmente entre corretores ativos"
+  - "Distribuir por quantidade fixa por corretor"
+- Botão "Chamar no WhatsApp" por linha (`https://wa.me/55<phone>`)
 
-**Tela do corretor (`/meus-leads`)** — lista mobile-first com cards, botões: novo lead, registrar interação (modal), mudar status (select), abrir WhatsApp (`https://wa.me/<phone>`).
+## 5. Server functions (`src/lib/bulk-leads.functions.ts`)
 
-**Detalhes do lead** — todos os campos + timeline de `lead_interactions` em ordem desc + form para nova interação.
+Todas com `requireSupabaseAuth` + checagem de role `admin`:
+- `checkPhoneDuplicates({ phones }) → { existingPhones[] }` — valida no servidor contra `leads.phone_normalized`
+- `createImportBatch({ name, rows[], counters }) → { batchId, importedCount }` — insere o lote + leads válidos não-duplicados em transação lógica (1 insert do batch + bulk insert dos leads)
+- `listImportBatches()` / `getImportBatchLeads({ batchId })`
+- `distributeLeads({ batchId, mode, brokerId?, count?, leadIds? })` — modos: `all_unassigned`, `selected`, `even_split`, `fixed_per_broker`
 
-**Configurações Kanban** — lista reordenável (drag handle), edit inline, color picker, toggle ativo, criar nova etapa.
+## 6. Utilitários (`src/lib/phone.ts`)
+- `normalizePhone(raw)` → string só-dígitos sem `+55`, formato `DD9XXXXXXXX` ou `DDXXXXXXXX`
+- `validateBrazilianPhone(normalized)` → `valid | invalid` (10 ou 11 dígitos, DDD plausível)
+- `parseContactLine(line)` → `{ name?, rawPhone }` (regex pega último bloco numérico, resto vira nome se houver separador `-,|:` )
+- `parseCsv(text)` → array de objetos com colunas `nome, telefone, cidade, bairro, origem, observacoes`
+- `whatsappLink(normalized)` → `https://wa.me/55<digits>`
 
-**Gestão de corretores** — admin cria via convite (signup com email + role = corretor inserido em `user_roles`); editar nome/telefone/ativo; mostra contagem de leads e métricas.
+Toda validação é feita também no servidor antes do insert (não confiar no cliente).
 
-## Seed de exemplo
-Migration insere: 10 statuses padrão; o primeiro usuário registrado vira admin (via lógica no trigger). Dados de demonstração (corretores fictícios + leads) podem ser inseridos manualmente após o primeiro login para evitar conflito com auth real.
+## 7. Filtros adicionais
 
-## Considerações futuras (SaaS multiempresa)
-Estrutura preparada: adicionar coluna `tenant_id` em todas as tabelas no futuro + RLS por tenant. Não implementado agora para manter simplicidade.
+Adicionar dropdown "Lote" em:
+- `/_authenticated/leads.tsx` (admin)
+- `/_authenticated/kanban.tsx`
+- `/_authenticated/meus-leads.tsx`
 
-## Entrega em fases
-1. Habilitar Lovable Cloud + schema + RLS + seed de statuses
-2. Auth (login, guard, hook de papel) + layout (sidebar/bottom nav)
-3. Gestão de corretores + dashboard admin
-4. CRUD de leads (tabela admin + detalhes + histórico)
-5. Kanban com drag & drop
-6. Tela do corretor (mobile) + WhatsApp + interações rápidas
-7. Configurações do Kanban
-8. Polimento responsivo + dados de exemplo
+Carregando opções de `lead_import_batches`.
 
-## Pontos a confirmar
-- **Primeiro admin**: criar via "primeiro usuário registrado = admin" automaticamente, ou você prefere que eu defina um email específico como admin no seed?
-- **Cadastro de corretor**: o admin envia convite por email (Supabase magic link) ou cria com senha temporária que o corretor troca depois?
+## 8. Dashboard
+- Card adicional: "Leads importados em massa" (count de leads com `import_batch_id IS NOT NULL`)
+- Card: "Lotes ativos" (lotes com leads não distribuídos)
+
+## 9. Integração com Kanban
+- Leads novos entram com `status_id` = status com menor `position` ativo (já é "Novo lead")
+- Se existir status "Distribuído", após `distributeLeads` mover para esse status (verificar pelo nome, fallback: manter "Novo lead")
+
+## 10. Compatibilidade
+Sem mudanças destrutivas em `leads`, `profiles`, `kanban_statuses`, `lead_interactions`. Apenas adições. Telas existentes continuam funcionando.
+
+---
+
+## Detalhes técnicos
+
+**Parser de telefone (regex)**: extrair `\d+` da linha, juntar, remover prefixo `55` se resultar em 12-13 dígitos, validar 10/11 dígitos finais com DDD entre 11-99.
+
+**Deduplicação**: feita em duas camadas — (1) dentro do lote sendo importado, (2) contra `leads.phone_normalized` via server function antes do insert.
+
+**Performance bulk insert**: dividir em chunks de 500 linhas no `supabase.from('leads').insert([...])` se necessário.
+
+**Distribuição igualitária**: round-robin sobre `profiles` ativos com role `corretor`, atualizando `assigned_to_user_id` em batch via `.in('id', leadIds)` por corretor.
+
+**CSV parsing**: implementação leve manual (split por linha, split por `,` respeitando aspas) — sem nova dependência.
+
+**RLS para corretores verem o lote**: política SELECT em `lead_import_batches` que checa `EXISTS (SELECT 1 FROM leads WHERE import_batch_id = lead_import_batches.id AND assigned_to_user_id = auth.uid())`.
+
+**Arquivos novos**:
+- `supabase/migrations/<timestamp>_bulk_leads.sql`
+- `src/lib/phone.ts`
+- `src/lib/bulk-leads.functions.ts`
+- `src/routes/_authenticated/leads-em-massa.tsx`
+- `src/routes/_authenticated/leads-em-massa.$batchId.tsx`
+- `src/components/BulkImportPreview.tsx`
+- `src/components/DistributeLeadsDialog.tsx`
+
+**Arquivos editados**:
+- `src/components/AppLayout.tsx` (novo item de menu)
+- `src/routes/_authenticated/leads.tsx`, `kanban.tsx`, `meus-leads.tsx` (filtro por lote)
+- `src/routes/_authenticated/dashboard.tsx` (cards novos)

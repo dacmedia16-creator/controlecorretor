@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
-import { Users, ListChecks, PhoneCall, CalendarClock, Trophy, XCircle, UserCheck } from "lucide-react";
+import { Users, ListChecks, PhoneCall, CalendarClock, Trophy, XCircle, UserCheck, Upload } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -18,15 +18,17 @@ function Dashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
-      const [leads, brokers, statuses] = await Promise.all([
-        supabase.from("leads").select("id, status_id, assigned_to_user_id"),
+      const [leads, brokers, statuses, batches] = await Promise.all([
+        supabase.from("leads").select("id, status_id, assigned_to_user_id, import_batch_id"),
         supabase.from("profiles").select("id, name, active").eq("active", true),
         supabase.from("kanban_statuses").select("id, name"),
+        supabase.from("lead_import_batches").select("id"),
       ]);
       return {
         leads: leads.data ?? [],
         brokers: brokers.data ?? [],
         statuses: statuses.data ?? [],
+        batches: batches.data ?? [],
       };
     },
   });
@@ -41,6 +43,8 @@ function Dashboard() {
   const cards = [
     { label: "Total de leads", value: data.leads.length, icon: ListChecks, color: "bg-blue-500" },
     { label: "Sem responsável", value: data.leads.filter((l) => !l.assigned_to_user_id).length, icon: XCircle, color: "bg-orange-500" },
+    { label: "Importados em massa", value: data.leads.filter((l) => l.import_batch_id).length, icon: Upload, color: "bg-indigo-500" },
+    { label: "Lotes importados", value: data.batches.length, icon: ListChecks, color: "bg-purple-500" },
     { label: "Em contato", value: byStatusName("Tentativa de contato") + byStatusName("Conversei com o lead"), icon: PhoneCall, color: "bg-cyan-500" },
     { label: "Retorno agendado", value: byStatusName("Retorno agendado"), icon: CalendarClock, color: "bg-sky-500" },
     { label: "Imóveis captados", value: byStatusName("Imóvel captado"), icon: Trophy, color: "bg-green-500" },

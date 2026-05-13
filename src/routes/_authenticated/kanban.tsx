@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { whatsappUrl } from "@/lib/constants";
 import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ type Lead = {
   phone: string | null;
   status_id: string | null;
   assigned_to_user_id: string | null;
+  import_batch_id: string | null;
   updated_at: string;
 };
 
@@ -27,18 +29,20 @@ function KanbanPage() {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [fBatch, setFBatch] = useState("all");
 
   const { data, isLoading } = useQuery({
     queryKey: ["kanban", user?.id, role],
     enabled: !!user,
     queryFn: async () => {
-      let q = supabase.from("leads").select("id,name,phone,status_id,assigned_to_user_id,updated_at");
+      let q = supabase.from("leads").select("id,name,phone,status_id,assigned_to_user_id,import_batch_id,updated_at");
       if (role === "corretor") q = q.or(`assigned_to_user_id.eq.${user!.id},created_by_user_id.eq.${user!.id}`);
-      const [leads, statuses, brokers, lastInter] = await Promise.all([
+      const [leads, statuses, brokers, lastInter, batches] = await Promise.all([
         q.order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color,position").eq("active", true).order("position"),
         supabase.from("profiles").select("id,name"),
         supabase.from("lead_interactions").select("lead_id, created_at, next_follow_up_date").order("created_at", { ascending: false }),
+        supabase.from("lead_import_batches").select("id,name").order("created_at", { ascending: false }),
       ]);
       const lastByLead = new Map<string, { last: string; next: string | null }>();
       (lastInter.data ?? []).forEach((i) => {
@@ -48,6 +52,7 @@ function KanbanPage() {
         leads: (leads.data ?? []) as Lead[],
         statuses: statuses.data ?? [],
         brokers: brokers.data ?? [],
+        batches: batches.data ?? [],
         lastByLead,
       };
     },
@@ -84,11 +89,29 @@ function KanbanPage() {
   const activeLead = activeId ? data.leads.find((l) => l.id === activeId) : null;
   const brokerName = (id: string | null) => data.brokers.find((b) => b.id === id)?.name ?? "Sem responsável";
 
+  const visibleLeads = data.leads.filter((l) => {
+    if (fBatch === "all") return true;
+    if (fBatch === "_none_") return !l.import_batch_id;
+    return l.import_batch_id === fBatch;
+  });
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Kanban</h1>
-        <p className="text-sm text-muted-foreground">Arraste os cards para mudar o status</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Kanban</h1>
+          <p className="text-sm text-muted-foreground">Arraste os cards para mudar o status</p>
+        </div>
+        <div className="w-full sm:w-64">
+          <Select value={fBatch} onValueChange={setFBatch}>
+            <SelectTrigger><SelectValue placeholder="Filtrar por lote" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os lotes</SelectItem>
+              <SelectItem value="_none_">Sem lote</SelectItem>
+              {data.batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <DndContext
@@ -99,7 +122,7 @@ function KanbanPage() {
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {data.statuses.map((s) => {
-            const colLeads = data.leads.filter((l) => l.status_id === s.id);
+            const colLeads = visibleLeads.filter((l) => l.status_id === s.id);
             return (
               <Column key={s.id} id={s.id} name={s.name} color={s.color} count={colLeads.length}>
                 {colLeads.map((l) => (

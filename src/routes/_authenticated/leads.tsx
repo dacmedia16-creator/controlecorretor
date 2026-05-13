@@ -27,17 +27,19 @@ function LeadsPage() {
   const [fStatus, setFStatus] = useState("all");
   const [fCity, setFCity] = useState("");
   const [fSource, setFSource] = useState("all");
+  const [fBatch, setFBatch] = useState("all");
   const [fSearch, setFSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads-admin"],
     queryFn: async () => {
-      const [leads, brokers, statuses] = await Promise.all([
+      const [leads, brokers, statuses, batches] = await Promise.all([
         supabase.from("leads").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("id,name"),
         supabase.from("kanban_statuses").select("id,name,color").order("position"),
+        supabase.from("lead_import_batches").select("id,name").order("created_at", { ascending: false }),
       ]);
-      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [] };
+      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [], batches: batches.data ?? [] };
     },
   });
 
@@ -47,11 +49,14 @@ function LeadsPage() {
       if (fBroker !== "all" && l.assigned_to_user_id !== fBroker) return false;
       if (fStatus !== "all" && l.status_id !== fStatus) return false;
       if (fSource !== "all" && l.source !== fSource) return false;
+      if (fBatch !== "all") {
+        if (fBatch === "_none_" ? l.import_batch_id : l.import_batch_id !== fBatch) return false;
+      }
       if (fCity && !(l.city ?? "").toLowerCase().includes(fCity.toLowerCase())) return false;
       if (fSearch && !(l.name ?? "").toLowerCase().includes(fSearch.toLowerCase()) && !(l.phone ?? "").includes(fSearch) && !(l.email ?? "").toLowerCase().includes(fSearch.toLowerCase())) return false;
       return true;
     });
-  }, [data, fBroker, fStatus, fCity, fSource, fSearch]);
+  }, [data, fBroker, fStatus, fCity, fSource, fBatch, fSearch]);
 
   const brokerName = (id: string | null) => data?.brokers.find((b) => b.id === id)?.name ?? "—";
   const status = (id: string | null) => data?.statuses.find((s) => s.id === id);
@@ -80,7 +85,7 @@ function LeadsPage() {
       </div>
 
       <Card className="p-3">
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-6">
           <Input placeholder="Buscar nome / telefone / e-mail" value={fSearch} onChange={(e) => setFSearch(e.target.value)} />
           <Select value={fBroker} onValueChange={setFBroker}>
             <SelectTrigger><SelectValue placeholder="Corretor" /></SelectTrigger>
@@ -102,6 +107,14 @@ function LeadsPage() {
             <SelectContent>
               <SelectItem value="all">Todas origens</SelectItem>
               {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fBatch} onValueChange={setFBatch}>
+            <SelectTrigger><SelectValue placeholder="Lote" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os lotes</SelectItem>
+              <SelectItem value="_none_">Sem lote</SelectItem>
+              {data?.batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

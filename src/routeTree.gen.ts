@@ -13,11 +13,13 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedMeusLeadsRouteImport } from './routes/_authenticated/meus-leads'
+import { Route as AuthenticatedLeadsEmMassaRouteImport } from './routes/_authenticated/leads-em-massa'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedKanbanRouteImport } from './routes/_authenticated/kanban'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCorretoresRouteImport } from './routes/_authenticated/corretores'
 import { Route as AuthenticatedLeadsIdRouteImport } from './routes/_authenticated/leads.$id'
+import { Route as AuthenticatedLeadsEmMassaBatchIdRouteImport } from './routes/_authenticated/leads-em-massa.$batchId'
 import { Route as AuthenticatedConfiguracoesKanbanRouteImport } from './routes/_authenticated/configuracoes.kanban'
 
 const LoginRoute = LoginRouteImport.update({
@@ -39,6 +41,12 @@ const AuthenticatedMeusLeadsRoute = AuthenticatedMeusLeadsRouteImport.update({
   path: '/meus-leads',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedLeadsEmMassaRoute =
+  AuthenticatedLeadsEmMassaRouteImport.update({
+    id: '/leads-em-massa',
+    path: '/leads-em-massa',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -64,6 +72,12 @@ const AuthenticatedLeadsIdRoute = AuthenticatedLeadsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedLeadsRoute,
 } as any)
+const AuthenticatedLeadsEmMassaBatchIdRoute =
+  AuthenticatedLeadsEmMassaBatchIdRouteImport.update({
+    id: '/$batchId',
+    path: '/$batchId',
+    getParentRoute: () => AuthenticatedLeadsEmMassaRoute,
+  } as any)
 const AuthenticatedConfiguracoesKanbanRoute =
   AuthenticatedConfiguracoesKanbanRouteImport.update({
     id: '/configuracoes/kanban',
@@ -78,8 +92,10 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/kanban': typeof AuthenticatedKanbanRoute
   '/leads': typeof AuthenticatedLeadsRouteWithChildren
+  '/leads-em-massa': typeof AuthenticatedLeadsEmMassaRouteWithChildren
   '/meus-leads': typeof AuthenticatedMeusLeadsRoute
   '/configuracoes/kanban': typeof AuthenticatedConfiguracoesKanbanRoute
+  '/leads-em-massa/$batchId': typeof AuthenticatedLeadsEmMassaBatchIdRoute
   '/leads/$id': typeof AuthenticatedLeadsIdRoute
 }
 export interface FileRoutesByTo {
@@ -89,8 +105,10 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/kanban': typeof AuthenticatedKanbanRoute
   '/leads': typeof AuthenticatedLeadsRouteWithChildren
+  '/leads-em-massa': typeof AuthenticatedLeadsEmMassaRouteWithChildren
   '/meus-leads': typeof AuthenticatedMeusLeadsRoute
   '/configuracoes/kanban': typeof AuthenticatedConfiguracoesKanbanRoute
+  '/leads-em-massa/$batchId': typeof AuthenticatedLeadsEmMassaBatchIdRoute
   '/leads/$id': typeof AuthenticatedLeadsIdRoute
 }
 export interface FileRoutesById {
@@ -102,8 +120,10 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/kanban': typeof AuthenticatedKanbanRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRouteWithChildren
+  '/_authenticated/leads-em-massa': typeof AuthenticatedLeadsEmMassaRouteWithChildren
   '/_authenticated/meus-leads': typeof AuthenticatedMeusLeadsRoute
   '/_authenticated/configuracoes/kanban': typeof AuthenticatedConfiguracoesKanbanRoute
+  '/_authenticated/leads-em-massa/$batchId': typeof AuthenticatedLeadsEmMassaBatchIdRoute
   '/_authenticated/leads/$id': typeof AuthenticatedLeadsIdRoute
 }
 export interface FileRouteTypes {
@@ -115,8 +135,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/kanban'
     | '/leads'
+    | '/leads-em-massa'
     | '/meus-leads'
     | '/configuracoes/kanban'
+    | '/leads-em-massa/$batchId'
     | '/leads/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -126,8 +148,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/kanban'
     | '/leads'
+    | '/leads-em-massa'
     | '/meus-leads'
     | '/configuracoes/kanban'
+    | '/leads-em-massa/$batchId'
     | '/leads/$id'
   id:
     | '__root__'
@@ -138,8 +162,10 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/kanban'
     | '/_authenticated/leads'
+    | '/_authenticated/leads-em-massa'
     | '/_authenticated/meus-leads'
     | '/_authenticated/configuracoes/kanban'
+    | '/_authenticated/leads-em-massa/$batchId'
     | '/_authenticated/leads/$id'
   fileRoutesById: FileRoutesById
 }
@@ -179,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMeusLeadsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/leads-em-massa': {
+      id: '/_authenticated/leads-em-massa'
+      path: '/leads-em-massa'
+      fullPath: '/leads-em-massa'
+      preLoaderRoute: typeof AuthenticatedLeadsEmMassaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/leads': {
       id: '/_authenticated/leads'
       path: '/leads'
@@ -214,6 +247,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadsIdRouteImport
       parentRoute: typeof AuthenticatedLeadsRoute
     }
+    '/_authenticated/leads-em-massa/$batchId': {
+      id: '/_authenticated/leads-em-massa/$batchId'
+      path: '/$batchId'
+      fullPath: '/leads-em-massa/$batchId'
+      preLoaderRoute: typeof AuthenticatedLeadsEmMassaBatchIdRouteImport
+      parentRoute: typeof AuthenticatedLeadsEmMassaRoute
+    }
     '/_authenticated/configuracoes/kanban': {
       id: '/_authenticated/configuracoes/kanban'
       path: '/configuracoes/kanban'
@@ -235,11 +275,27 @@ const AuthenticatedLeadsRouteChildren: AuthenticatedLeadsRouteChildren = {
 const AuthenticatedLeadsRouteWithChildren =
   AuthenticatedLeadsRoute._addFileChildren(AuthenticatedLeadsRouteChildren)
 
+interface AuthenticatedLeadsEmMassaRouteChildren {
+  AuthenticatedLeadsEmMassaBatchIdRoute: typeof AuthenticatedLeadsEmMassaBatchIdRoute
+}
+
+const AuthenticatedLeadsEmMassaRouteChildren: AuthenticatedLeadsEmMassaRouteChildren =
+  {
+    AuthenticatedLeadsEmMassaBatchIdRoute:
+      AuthenticatedLeadsEmMassaBatchIdRoute,
+  }
+
+const AuthenticatedLeadsEmMassaRouteWithChildren =
+  AuthenticatedLeadsEmMassaRoute._addFileChildren(
+    AuthenticatedLeadsEmMassaRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedCorretoresRoute: typeof AuthenticatedCorretoresRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKanbanRoute: typeof AuthenticatedKanbanRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRouteWithChildren
+  AuthenticatedLeadsEmMassaRoute: typeof AuthenticatedLeadsEmMassaRouteWithChildren
   AuthenticatedMeusLeadsRoute: typeof AuthenticatedMeusLeadsRoute
   AuthenticatedConfiguracoesKanbanRoute: typeof AuthenticatedConfiguracoesKanbanRoute
 }
@@ -249,6 +305,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedKanbanRoute: AuthenticatedKanbanRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRouteWithChildren,
+  AuthenticatedLeadsEmMassaRoute: AuthenticatedLeadsEmMassaRouteWithChildren,
   AuthenticatedMeusLeadsRoute: AuthenticatedMeusLeadsRoute,
   AuthenticatedConfiguracoesKanbanRoute: AuthenticatedConfiguracoesKanbanRoute,
 }
