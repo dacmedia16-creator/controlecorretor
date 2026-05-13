@@ -70,7 +70,9 @@ function MyLeadsPage() {
               <Select value={l.status_id ?? ""} onValueChange={(v) => changeStatus(l.id, v)}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
-                  {data.statuses.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  {data.statuses
+                    .filter((s: any) => s.kanban_type === (l.import_batch_id ? "bulk_leads" : "general"))
+                    .map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
 
