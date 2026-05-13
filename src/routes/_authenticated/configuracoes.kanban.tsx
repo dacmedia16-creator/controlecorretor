@@ -27,6 +27,7 @@ function KanbanSettingsPage() {
 
   if (role !== "admin") return <p>Acesso restrito.</p>;
   if (isLoading || !data) return <div>Carregando…</div>;
+  const list = data;
 
   async function update(id: string, fields: any) {
     const { error } = await supabase.from("kanban_statuses").update(fields).eq("id", id);
