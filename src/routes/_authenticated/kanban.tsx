@@ -103,17 +103,7 @@ function KanbanPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Kanban</h1>
-          <p className="text-sm text-muted-foreground">Arraste os cards para mudar o status</p>
-        </div>
-        <div className="w-full sm:w-64">
-          <Select value={fBatch} onValueChange={setFBatch}>
-            <SelectTrigger><SelectValue placeholder="Filtrar por lote" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os lotes</SelectItem>
-              <SelectItem value="_none_">Sem lote</SelectItem>
-              {data.batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <p className="text-sm text-muted-foreground">Leads cadastrados manualmente. Arraste para mudar o status.</p>
         </div>
       </div>
 
