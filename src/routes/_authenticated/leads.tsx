@@ -74,7 +74,7 @@ function LeadsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">Leads</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} de {data?.leads.length ?? 0}</p>
+          <p className="text-sm text-muted-foreground">{filtered.length} de {data?.leads.length ?? 0} leads manuais</p>
         </div>
         <Button onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 size-4" /> Novo lead
