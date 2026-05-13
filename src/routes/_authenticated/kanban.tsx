@@ -29,7 +29,6 @@ function KanbanPage() {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [fBatch, setFBatch] = useState("all");
 
   const { data, isLoading } = useQuery({
     queryKey: ["kanban", user?.id, role],
