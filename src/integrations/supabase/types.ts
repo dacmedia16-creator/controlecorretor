@@ -41,6 +41,42 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_import_batches: {
+        Row: {
+          created_at: string
+          created_by_user_id: string
+          duplicate_count: number
+          id: string
+          imported_count: number
+          invalid_count: number
+          name: string
+          total_rows: number
+          valid_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id: string
+          duplicate_count?: number
+          id?: string
+          imported_count?: number
+          invalid_count?: number
+          name: string
+          total_rows?: number
+          valid_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string
+          duplicate_count?: number
+          id?: string
+          imported_count?: number
+          invalid_count?: number
+          name?: string
+          total_rows?: number
+          valid_count?: number
+        }
+        Relationships: []
+      }
       lead_interactions: {
         Row: {
           created_at: string
@@ -98,10 +134,12 @@ export type Database = {
           email: string | null
           general_notes: string | null
           id: string
+          import_batch_id: string | null
           interest_type: string | null
           name: string
           neighborhood: string | null
           phone: string | null
+          phone_normalized: string | null
           property_type: string | null
           source: string | null
           status_id: string | null
@@ -115,10 +153,12 @@ export type Database = {
           email?: string | null
           general_notes?: string | null
           id?: string
+          import_batch_id?: string | null
           interest_type?: string | null
           name: string
           neighborhood?: string | null
           phone?: string | null
+          phone_normalized?: string | null
           property_type?: string | null
           source?: string | null
           status_id?: string | null
@@ -132,10 +172,12 @@ export type Database = {
           email?: string | null
           general_notes?: string | null
           id?: string
+          import_batch_id?: string | null
           interest_type?: string | null
           name?: string
           neighborhood?: string | null
           phone?: string | null
+          phone_normalized?: string | null
           property_type?: string | null
           source?: string | null
           status_id?: string | null
@@ -154,6 +196,13 @@ export type Database = {
             columns: ["created_by_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "lead_import_batches"
             referencedColumns: ["id"]
           },
           {
@@ -225,6 +274,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_phone: { Args: { _phone: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "corretor"
