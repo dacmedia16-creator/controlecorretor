@@ -21,7 +21,7 @@ function Dashboard() {
       const [leads, brokers, statuses, batches] = await Promise.all([
         supabase.from("leads").select("id, status_id, assigned_to_user_id, import_batch_id"),
         supabase.from("profiles").select("id, name, active").eq("active", true),
-        supabase.from("kanban_statuses").select("id, name"),
+        supabase.from("kanban_statuses").select("id, name, kanban_type"),
         supabase.from("lead_import_batches").select("id"),
       ]);
       return {
@@ -35,21 +35,45 @@ function Dashboard() {
 
   if (isLoading || !data) return <div className="text-muted-foreground">Carregando…</div>;
 
-  const byStatusName = (n: string) => {
-    const s = data.statuses.find((x) => x.name === n);
-    return s ? data.leads.filter((l) => l.status_id === s.id).length : 0;
+  const generalStatuses = data.statuses.filter((s: any) => s.kanban_type === "general");
+  const bulkStatuses = data.statuses.filter((s: any) => s.kanban_type === "bulk_leads");
+  const bulkLeads = data.leads.filter((l) => l.import_batch_id);
+  const generalLeads = data.leads.filter((l) => !l.import_batch_id);
+
+  const byGeneralName = (n: string) => {
+    const s = generalStatuses.find((x: any) => x.name === n);
+    return s ? generalLeads.filter((l) => l.status_id === s.id).length : 0;
   };
+  const byBulkName = (n: string) => {
+    const s = bulkStatuses.find((x: any) => x.name === n);
+    return s ? bulkLeads.filter((l) => l.status_id === s.id).length : 0;
+  };
+  const byStatusName = byGeneralName;
 
   const cards = [
     { label: "Total de leads", value: data.leads.length, icon: ListChecks, color: "bg-blue-500" },
     { label: "Sem responsável", value: data.leads.filter((l) => !l.assigned_to_user_id).length, icon: XCircle, color: "bg-orange-500" },
-    { label: "Importados em massa", value: data.leads.filter((l) => l.import_batch_id).length, icon: Upload, color: "bg-indigo-500" },
+    { label: "Importados em massa", value: bulkLeads.length, icon: Upload, color: "bg-indigo-500" },
     { label: "Lotes importados", value: data.batches.length, icon: ListChecks, color: "bg-purple-500" },
     { label: "Em contato", value: byStatusName("Tentativa de contato") + byStatusName("Conversei com o lead"), icon: PhoneCall, color: "bg-cyan-500" },
     { label: "Retorno agendado", value: byStatusName("Retorno agendado"), icon: CalendarClock, color: "bg-sky-500" },
     { label: "Imóveis captados", value: byStatusName("Imóvel captado"), icon: Trophy, color: "bg-green-500" },
     { label: "Descartados", value: byStatusName("Descartado") + byStatusName("Sem interesse"), icon: XCircle, color: "bg-rose-500" },
     { label: "Corretores ativos", value: data.brokers.length, icon: UserCheck, color: "bg-violet-500" },
+  ];
+
+  const bulkCards = [
+    { label: "Total em massa", value: bulkLeads.length },
+    { label: "Sem responsável", value: bulkLeads.filter((l) => !l.assigned_to_user_id).length },
+    { label: "Distribuídos", value: bulkLeads.filter((l) => l.assigned_to_user_id).length },
+    { label: "Primeira tentativa", value: byBulkName("Primeira tentativa") },
+    { label: "WhatsApp enviado", value: byBulkName("Mandou WhatsApp") },
+    { label: "Responderam", value: byBulkName("Respondeu") },
+    { label: "Interessados", value: byBulkName("Interessado") },
+    { label: "Possíveis captações", value: byBulkName("Possível captação") },
+    { label: "Imóveis captados", value: byBulkName("Imóvel captado") },
+    { label: "Números inválidos", value: byBulkName("Número inválido") },
+    { label: "Descartados", value: byBulkName("Descartado") + byBulkName("Sem interesse") },
   ];
 
   // Per-broker performance
