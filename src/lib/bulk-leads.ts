@@ -10,8 +10,9 @@ export async function assignLeadsInChunks(
   let done = 0;
   for (let i = 0; i < ids.length; i += chunkSize) {
     const chunk = ids.slice(i, i + chunkSize);
-    const update: Record<string, any> = { assigned_to_user_id: userId };
-    if (opts?.statusId) update.status_id = opts.statusId;
+    const update = opts?.statusId
+      ? { assigned_to_user_id: userId, status_id: opts.statusId }
+      : { assigned_to_user_id: userId };
     const { error } = await supabase
       .from("leads")
       .update(update)
