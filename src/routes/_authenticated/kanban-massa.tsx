@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
@@ -26,7 +26,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { whatsappUrl } from "@/lib/constants";
-import { MessageCircle, Phone, ClipboardList, CalendarPlus } from "lucide-react";
+import {
+  MessageCircle,
+  Phone,
+  ClipboardList,
+  CalendarPlus,
+  ChevronRight,
+  ChevronLeft,
+  Focus,
+  LayoutGrid,
+} from "lucide-react";
 import { toast } from "sonner";
 import { InteractionDialog } from "@/components/InteractionDialog";
 
@@ -47,13 +56,31 @@ type Lead = {
   updated_at: string;
 };
 
-const QUICK_ACTIONS: { label: string; statusName: string }[] = [
-  { label: "Não atendeu", statusName: "Não atendeu" },
-  { label: "Mandou WhatsApp", statusName: "Mandou WhatsApp" },
-  { label: "Interessado", statusName: "Interessado" },
-  { label: "Sem interesse", statusName: "Sem interesse" },
-  { label: "Número inválido", statusName: "Número inválido" },
+type QuickAction = {
+  label: string;
+  statusName: string;
+  tone?: "default" | "success" | "warning" | "danger" | "info";
+  opensInteraction?: boolean;
+};
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { label: "Não atendeu", statusName: "Não atendeu", tone: "warning" },
+  { label: "WhatsApp enviado", statusName: "Mandou WhatsApp", tone: "info" },
+  { label: "Aguardando resposta", statusName: "Aguardando resposta", tone: "default" },
+  { label: "Respondeu", statusName: "Respondeu", tone: "info" },
+  { label: "Interessado", statusName: "Interessado", tone: "success" },
+  { label: "Sem interesse", statusName: "Sem interesse", tone: "danger" },
+  { label: "Número inválido", statusName: "Número inválido", tone: "danger" },
+  { label: "Agendar retorno", statusName: "Agendar retorno", tone: "info", opensInteraction: true },
 ];
+
+const TONE_CLASSES: Record<NonNullable<QuickAction["tone"]>, string> = {
+  default: "bg-muted hover:bg-muted/80 text-foreground border-border",
+  success: "bg-emerald-600 hover:bg-emerald-700 text-white border-transparent",
+  warning: "bg-amber-500 hover:bg-amber-600 text-white border-transparent",
+  danger: "bg-red-600 hover:bg-red-700 text-white border-transparent",
+  info: "bg-sky-600 hover:bg-sky-700 text-white border-transparent",
+};
 
 function BulkKanbanPage() {
   const { user, role } = useAuth();
@@ -70,6 +97,8 @@ function BulkKanbanPage() {
   const [fSpecial, setFSpecial] = useState<"none" | "no_interaction" | "today_followup">("none");
   const [search, setSearch] = useState("");
   const [interactLead, setInteractLead] = useState<string | null>(null);
+  const [forceFocus, setForceFocus] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(0);
 
   const { data, isLoading } = useQuery({
     queryKey,
@@ -118,31 +147,45 @@ function BulkKanbanPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  async function setStatus(leadId: string, newStatusId: string) {
+  async function setStatus(leadId: string, newStatusId: string, opts?: { silent?: boolean }) {
     const lead = data?.leads.find((l) => l.id === leadId);
     if (!lead || lead.status_id === newStatusId) return;
+    const nowIso = new Date().toISOString();
     qc.setQueryData<any>(queryKey, (old: any) =>
       !old
         ? old
-        : { ...old, leads: old.leads.map((l: Lead) => (l.id === leadId ? { ...l, status_id: newStatusId } : l)) },
+        : {
+            ...old,
+            leads: old.leads.map((l: Lead) =>
+              l.id === leadId ? { ...l, status_id: newStatusId, updated_at: nowIso } : l,
+            ),
+          },
     );
-    const { error } = await supabase.from("leads").update({ status_id: newStatusId }).eq("id", leadId);
+    const { error } = await supabase
+      .from("leads")
+      .update({ status_id: newStatusId, updated_at: nowIso })
+      .eq("id", leadId);
     if (error) {
       toast.error(error.message);
       qc.invalidateQueries({ queryKey });
-    } else {
-      toast.success("Status atualizado");
-      qc.invalidateQueries({ queryKey });
-    }
-  }
-
-  async function quickStatusByName(leadId: string, statusName: string) {
-    const s = data?.statuses.find((x) => x.name === statusName);
-    if (!s) {
-      toast.error(`Status "${statusName}" não está configurado`);
       return;
     }
-    await setStatus(leadId, s.id);
+    if (!opts?.silent) toast.success("Status atualizado");
+    qc.invalidateQueries({ queryKey });
+  }
+
+  async function quickAction(leadId: string, action: QuickAction) {
+    const s = data?.statuses.find((x) => x.name === action.statusName);
+    if (!s) {
+      toast.error(`Status "${action.statusName}" não está configurado`);
+      return;
+    }
+    await setStatus(leadId, s.id, { silent: action.opensInteraction });
+    if (action.opensInteraction) {
+      setInteractLead(leadId);
+    } else {
+      toast.success(action.label);
+    }
   }
 
   async function onDragEnd(e: DragEndEvent) {
@@ -173,6 +216,8 @@ function BulkKanbanPage() {
     data.brokers.find((b) => b.id === id)?.name ?? "Sem responsável";
   const batchName = (id: string | null) =>
     data.batches.find((b) => b.id === id)?.name ?? "—";
+  const statusNameOf = (id: string | null) =>
+    data.statuses.find((s: any) => s.id === id)?.name ?? "—";
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -214,15 +259,29 @@ function BulkKanbanPage() {
         <div>
           <h1 className="text-2xl font-bold">Kanban Leads em Massa</h1>
           <p className="text-sm text-muted-foreground">
-            Leads importados em massa. Arraste para mudar o status.
+            Trabalhe leads em sequência com ações de um clique.
           </p>
         </div>
-        <Input
-          placeholder="Buscar por nome ou telefone"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:w-64"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Buscar por nome ou telefone"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full sm:w-64"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:inline-flex"
+            onClick={() => {
+              setForceFocus((v) => !v);
+              setFocusIndex(0);
+            }}
+          >
+            {forceFocus ? <LayoutGrid className="mr-1 size-4" /> : <Focus className="mr-1 size-4" />}
+            {forceFocus ? "Quadro" : "Modo foco"}
+          </Button>
+        </div>
       </div>
 
       <Card className="grid gap-2 p-3 md:grid-cols-4 lg:grid-cols-7">
@@ -248,47 +307,65 @@ function BulkKanbanPage() {
         Exibindo {visibleLeads.length.toLocaleString("pt-BR")} de {data.leads.length.toLocaleString("pt-BR")} leads em massa
       </div>
 
-      <DndContext
-        sensors={sensors}
-        onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))}
-        onDragEnd={onDragEnd}
-        onDragCancel={() => setActiveId(null)}
-      >
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {data.statuses.map((s: any) => {
-            const colLeads = visibleLeads.filter((l) => l.status_id === s.id);
-            return (
-              <Column key={s.id} id={s.id} name={s.name} color={s.color} count={colLeads.length}>
-                {colLeads.slice(0, 100).map((l) => (
-                  <BulkCard
-                    key={l.id}
-                    lead={l}
-                    brokerName={brokerName(l.assigned_to_user_id)}
-                    batchName={batchName(l.import_batch_id)}
-                    statusName={s.name}
-                    last={data.lastByLead.get(l.id)}
-                    onQuick={(name) => quickStatusByName(l.id, name)}
-                    onInteract={() => setInteractLead(l.id)}
-                  />
-                ))}
-                {colLeads.length > 100 && (
-                  <div className="px-2 py-1 text-[11px] text-muted-foreground">
-                    +{colLeads.length - 100} ocultos. Use os filtros para refinar.
-                  </div>
-                )}
-              </Column>
-            );
-          })}
-        </div>
-        <DragOverlay>
-          {activeLead && (
-            <Card className="w-72 p-3 shadow-lg">
-              <div className="font-medium">{activeLead.name}</div>
-              <div className="text-xs text-muted-foreground">{activeLead.phone}</div>
-            </Card>
-          )}
-        </DragOverlay>
-      </DndContext>
+      {/* Mobile / Modo foco: um lead por vez */}
+      <div className={forceFocus ? "" : "md:hidden"}>
+        <FocusView
+          leads={visibleLeads}
+          index={focusIndex}
+          setIndex={setFocusIndex}
+          brokerName={brokerName}
+          batchName={batchName}
+          statusName={(id) => statusNameOf(id)}
+          last={(id) => data.lastByLead.get(id)}
+          onQuick={(id, a) => quickAction(id, a)}
+          onInteract={(id) => setInteractLead(id)}
+        />
+      </div>
+
+      {/* Quadro Kanban (desktop) */}
+      <div className={forceFocus ? "hidden" : "hidden md:block"}>
+        <DndContext
+          sensors={sensors}
+          onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))}
+          onDragEnd={onDragEnd}
+          onDragCancel={() => setActiveId(null)}
+        >
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {data.statuses.map((s: any) => {
+              const colLeads = visibleLeads.filter((l) => l.status_id === s.id);
+              return (
+                <Column key={s.id} id={s.id} name={s.name} color={s.color} count={colLeads.length}>
+                  {colLeads.slice(0, 100).map((l) => (
+                    <BulkCard
+                      key={l.id}
+                      lead={l}
+                      brokerName={brokerName(l.assigned_to_user_id)}
+                      batchName={batchName(l.import_batch_id)}
+                      statusName={s.name}
+                      last={data.lastByLead.get(l.id)}
+                      onQuick={(a) => quickAction(l.id, a)}
+                      onInteract={() => setInteractLead(l.id)}
+                    />
+                  ))}
+                  {colLeads.length > 100 && (
+                    <div className="px-2 py-1 text-[11px] text-muted-foreground">
+                      +{colLeads.length - 100} ocultos. Use os filtros para refinar.
+                    </div>
+                  )}
+                </Column>
+              );
+            })}
+          </div>
+          <DragOverlay>
+            {activeLead && (
+              <Card className="w-72 p-3 shadow-lg">
+                <div className="font-medium">{activeLead.name}</div>
+                <div className="text-xs text-muted-foreground">{activeLead.phone}</div>
+              </Card>
+            )}
+          </DragOverlay>
+        </DndContext>
+      </div>
 
       {interactLead && (
         <InteractionDialog
@@ -373,7 +450,7 @@ function BulkCard({
   batchName: string;
   statusName: string;
   last?: { last: string; next: string | null };
-  onQuick: (statusName: string) => void;
+  onQuick: (a: QuickAction) => void;
   onInteract: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id });
@@ -434,17 +511,148 @@ function BulkCard({
         </Button>
       </div>
 
-      <div className="mt-1 flex flex-wrap gap-1" onPointerDown={stop} onClick={stop}>
-        {QUICK_ACTIONS.filter((a) => a.statusName !== statusName).slice(0, 3).map((a) => (
-          <Badge
+      <div className="mt-2 grid grid-cols-2 gap-1" onPointerDown={stop} onClick={stop}>
+        {QUICK_ACTIONS.filter((a) => a.statusName !== statusName).map((a) => (
+          <button
             key={a.statusName}
-            variant="outline"
-            className="cursor-pointer text-[10px] hover:bg-muted"
-            onClick={() => onQuick(a.statusName)}
+            type="button"
+            className={`rounded border px-1.5 py-1 text-[10px] font-medium transition ${TONE_CLASSES[a.tone ?? "default"]}`}
+            onClick={() => onQuick(a)}
           >
             {a.label}
-          </Badge>
+          </button>
         ))}
+      </div>
+    </Card>
+  );
+}
+
+function FocusView({
+  leads,
+  index,
+  setIndex,
+  brokerName,
+  batchName,
+  statusName,
+  last,
+  onQuick,
+  onInteract,
+}: {
+  leads: Lead[];
+  index: number;
+  setIndex: (i: number) => void;
+  brokerName: (id: string | null) => string;
+  batchName: (id: string | null) => string;
+  statusName: (id: string | null) => string;
+  last: (id: string) => { last: string; next: string | null } | undefined;
+  onQuick: (leadId: string, a: QuickAction) => void;
+  onInteract: (leadId: string) => void;
+}) {
+  // Garante que o índice fica dentro do intervalo após mudanças nos filtros
+  useEffect(() => {
+    if (index >= leads.length) setIndex(0);
+  }, [leads.length, index, setIndex]);
+
+  if (leads.length === 0) {
+    return (
+      <Card className="p-8 text-center text-sm text-muted-foreground">
+        Nenhum lead encontrado com os filtros atuais.
+      </Card>
+    );
+  }
+
+  const lead = leads[Math.min(index, leads.length - 1)];
+  const li = last(lead.id);
+  const goNext = () => setIndex((index + 1) % leads.length);
+  const goPrev = () => setIndex((index - 1 + leads.length) % leads.length);
+
+  return (
+    <Card className="p-4 sm:p-6">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          Lead {Math.min(index, leads.length - 1) + 1} de {leads.length}
+        </span>
+        <Badge variant="secondary">{statusName(lead.status_id)}</Badge>
+      </div>
+
+      <div className="mt-2">
+        <div className="text-xl font-bold leading-tight sm:text-2xl">{lead.name}</div>
+        <div className="text-base text-muted-foreground">{lead.phone ?? "Sem telefone"}</div>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>👤 {brokerName(lead.assigned_to_user_id)}</span>
+          <span>📦 {batchName(lead.import_batch_id)}</span>
+          {lead.city && <span>📍 {lead.city}{lead.neighborhood ? ` / ${lead.neighborhood}` : ""}</span>}
+        </div>
+        {li?.last && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            Última interação: {new Date(li.last).toLocaleString("pt-BR")}
+          </div>
+        )}
+        {li?.next && (
+          <div className="text-xs text-primary">
+            Próximo retorno: {new Date(li.next).toLocaleString("pt-BR")}
+          </div>
+        )}
+      </div>
+
+      {/* CTAs principais */}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {lead.phone ? (
+          <a href={whatsappUrl(lead.phone)} target="_blank" rel="noreferrer">
+            <Button className="h-12 w-full bg-emerald-600 text-base hover:bg-emerald-700">
+              <MessageCircle className="mr-2 size-5" />
+              WhatsApp
+            </Button>
+          </a>
+        ) : (
+          <Button disabled className="h-12 w-full text-base">
+            <MessageCircle className="mr-2 size-5" /> WhatsApp
+          </Button>
+        )}
+        {lead.phone ? (
+          <a href={`tel:${lead.phone}`}>
+            <Button className="h-12 w-full bg-sky-600 text-base hover:bg-sky-700">
+              <Phone className="mr-2 size-5" />
+              Ligar
+            </Button>
+          </a>
+        ) : (
+          <Button disabled className="h-12 w-full text-base">
+            <Phone className="mr-2 size-5" /> Ligar
+          </Button>
+        )}
+      </div>
+
+      {/* Ações rápidas grandes */}
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {QUICK_ACTIONS.map((a) => (
+          <button
+            key={a.statusName}
+            type="button"
+            onClick={() => {
+              onQuick(lead.id, a);
+              if (!a.opensInteraction) {
+                // pequeno atraso para o usuário ver feedback antes de avançar
+                setTimeout(goNext, 200);
+              }
+            }}
+            className={`h-12 rounded-md border px-2 text-sm font-medium transition ${TONE_CLASSES[a.tone ?? "default"]}`}
+          >
+            {a.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <Button variant="outline" className="h-11 flex-1" onClick={() => onInteract(lead.id)}>
+          <ClipboardList className="mr-2 size-4" /> Registrar
+        </Button>
+        <Button variant="outline" size="icon" className="h-11 w-11" onClick={goPrev} title="Anterior">
+          <ChevronLeft className="size-5" />
+        </Button>
+        <Button className="h-11 flex-1" onClick={goNext}>
+          Próximo lead <ChevronRight className="ml-2 size-5" />
+        </Button>
       </div>
     </Card>
   );
