@@ -49,11 +49,14 @@ function LeadsPage() {
       if (fBroker !== "all" && l.assigned_to_user_id !== fBroker) return false;
       if (fStatus !== "all" && l.status_id !== fStatus) return false;
       if (fSource !== "all" && l.source !== fSource) return false;
+      if (fBatch !== "all") {
+        if (fBatch === "_none_" ? l.import_batch_id : l.import_batch_id !== fBatch) return false;
+      }
       if (fCity && !(l.city ?? "").toLowerCase().includes(fCity.toLowerCase())) return false;
       if (fSearch && !(l.name ?? "").toLowerCase().includes(fSearch.toLowerCase()) && !(l.phone ?? "").includes(fSearch) && !(l.email ?? "").toLowerCase().includes(fSearch.toLowerCase())) return false;
       return true;
     });
-  }, [data, fBroker, fStatus, fCity, fSource, fSearch]);
+  }, [data, fBroker, fStatus, fCity, fSource, fBatch, fSearch]);
 
   const brokerName = (id: string | null) => data?.brokers.find((b) => b.id === id)?.name ?? "—";
   const status = (id: string | null) => data?.statuses.find((s) => s.id === id);
