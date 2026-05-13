@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload, Shuffle } from "lucide-react";
+import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload, Shuffle, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
