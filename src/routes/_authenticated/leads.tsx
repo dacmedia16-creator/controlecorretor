@@ -27,19 +27,19 @@ function LeadsPage() {
   const [fStatus, setFStatus] = useState("all");
   const [fCity, setFCity] = useState("");
   const [fSource, setFSource] = useState("all");
-  const [fBatch, setFBatch] = useState("all");
   const [fSearch, setFSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads-admin"],
     queryFn: async () => {
-      const [leads, brokers, statuses, batches] = await Promise.all([
-        supabase.from("leads").select("*").order("created_at", { ascending: false }),
+      const [leads, brokers, statuses] = await Promise.all([
+        // Apenas leads manuais (não importados em massa)
+        supabase.from("leads").select("*").is("import_batch_id", null).order("created_at", { ascending: false }),
         supabase.from("profiles").select("id,name"),
-        supabase.from("kanban_statuses").select("id,name,color").order("position"),
-        supabase.from("lead_import_batches").select("id,name").order("created_at", { ascending: false }),
+        supabase.from("kanban_statuses").select("id,name,color")
+          .eq("active", true).eq("kanban_type", "general").order("position"),
       ]);
-      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [], batches: batches.data ?? [] };
+      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [] };
     },
   });
 
@@ -49,14 +49,11 @@ function LeadsPage() {
       if (fBroker !== "all" && l.assigned_to_user_id !== fBroker) return false;
       if (fStatus !== "all" && l.status_id !== fStatus) return false;
       if (fSource !== "all" && l.source !== fSource) return false;
-      if (fBatch !== "all") {
-        if (fBatch === "_none_" ? l.import_batch_id : l.import_batch_id !== fBatch) return false;
-      }
       if (fCity && !(l.city ?? "").toLowerCase().includes(fCity.toLowerCase())) return false;
       if (fSearch && !(l.name ?? "").toLowerCase().includes(fSearch.toLowerCase()) && !(l.phone ?? "").includes(fSearch) && !(l.email ?? "").toLowerCase().includes(fSearch.toLowerCase())) return false;
       return true;
     });
-  }, [data, fBroker, fStatus, fCity, fSource, fBatch, fSearch]);
+  }, [data, fBroker, fStatus, fCity, fSource, fSearch]);
 
   const brokerName = (id: string | null) => data?.brokers.find((b) => b.id === id)?.name ?? "—";
   const status = (id: string | null) => data?.statuses.find((s) => s.id === id);
@@ -77,7 +74,7 @@ function LeadsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">Leads</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} de {data?.leads.length ?? 0}</p>
+          <p className="text-sm text-muted-foreground">{filtered.length} de {data?.leads.length ?? 0} leads manuais</p>
         </div>
         <Button onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 size-4" /> Novo lead
@@ -107,14 +104,6 @@ function LeadsPage() {
             <SelectContent>
               <SelectItem value="all">Todas origens</SelectItem>
               {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={fBatch} onValueChange={setFBatch}>
-            <SelectTrigger><SelectValue placeholder="Lote" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os lotes</SelectItem>
-              <SelectItem value="_none_">Sem lote</SelectItem>
-              {data?.batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
