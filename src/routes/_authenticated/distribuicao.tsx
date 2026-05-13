@@ -213,9 +213,10 @@ function QuickDistributionPage() {
     setProgress({ done: 0, total: ids.length });
     try {
       const broker = meta?.brokers.find((b) => b.id === manualBroker);
+      const distributedStatusId = await fetchBulkAssignedStatusId();
       await applyAssignments(
         ids.map((id) => ({ id, userId: manualBroker })),
-        { onProgress: (done, total) => setProgress({ done, total }) },
+        { statusId: distributedStatusId, onProgress: (done, total) => setProgress({ done, total }) },
       );
       await logDistribution([{ id: manualBroker, name: broker?.name ?? "—", count: ids.length }], ids.length);
       setLastResult({
