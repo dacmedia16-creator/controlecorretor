@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
-import { Users, ListChecks, PhoneCall, CalendarClock, Trophy, XCircle, UserCheck } from "lucide-react";
+import { Users, ListChecks, PhoneCall, CalendarClock, Trophy, XCircle, UserCheck, Upload } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
