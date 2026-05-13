@@ -27,17 +27,19 @@ function LeadsPage() {
   const [fStatus, setFStatus] = useState("all");
   const [fCity, setFCity] = useState("");
   const [fSource, setFSource] = useState("all");
+  const [fBatch, setFBatch] = useState("all");
   const [fSearch, setFSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads-admin"],
     queryFn: async () => {
-      const [leads, brokers, statuses] = await Promise.all([
+      const [leads, brokers, statuses, batches] = await Promise.all([
         supabase.from("leads").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("id,name"),
         supabase.from("kanban_statuses").select("id,name,color").order("position"),
+        supabase.from("lead_import_batches").select("id,name").order("created_at", { ascending: false }),
       ]);
-      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [] };
+      return { leads: leads.data ?? [], brokers: brokers.data ?? [], statuses: statuses.data ?? [], batches: batches.data ?? [] };
     },
   });
 
