@@ -10,16 +10,25 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Shuffle, History, Users, CheckCircle2, ListChecks, UserPlus } from "lucide-react";
+import { Shuffle, History, Users, CheckCircle2, UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/constants";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  applyAssignments,
+  fetchBatchUnassignedCount,
+  fetchBatchUnassignedIds,
+  fetchBrokerLeadCounts,
+} from "@/lib/bulk-leads";
 
 export const Route = createFileRoute("/_authenticated/distribuicao")({
   component: QuickDistributionPage,
 });
 
+const PAGE_SIZE = 100;
+const CONFIRM_THRESHOLD = 50;
 type Broker = { id: string; name: string };
-type LeadRow = { id: string; name: string; phone: string | null; assigned_to_user_id: string | null };
+type LeadRow = { id: string; name: string; phone: string | null };
 
 function QuickDistributionPage() {
   const { role, user } = useAuth();
@@ -28,48 +37,74 @@ function QuickDistributionPage() {
   const [batchId, setBatchId] = useState<string>("");
   const [selectedBrokers, setSelectedBrokers] = useState<Set<string>>(new Set());
   const [perBroker, setPerBroker] = useState<string>("");
+
   const [manualSelected, setManualSelected] = useState<Set<string>>(new Set());
   const [manualBroker, setManualBroker] = useState<string>("");
+  const [manualPage, setManualPage] = useState(0);
+
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState<null | "quick" | "manual">(null);
   const [lastResult, setLastResult] = useState<{
     total: number;
     perBroker: Array<{ id: string; name: string; count: number }>;
     remainingUnassigned: number;
   } | null>(null);
 
-  const { data: meta } = useQuery({
+  if (role !== "admin") return <p className="text-muted-foreground">Acesso restrito ao administrador.</p>;
+
+  const { data: meta, isLoading: metaLoading } = useQuery({
     queryKey: ["distrib-meta"],
     queryFn: async () => {
       const [b, p] = await Promise.all([
-        supabase.from("lead_import_batches").select("id,name,created_at,imported_count").order("created_at", { ascending: false }),
+        supabase
+          .from("lead_import_batches")
+          .select("id,name,created_at,imported_count")
+          .order("created_at", { ascending: false })
+          .limit(200),
         supabase.from("profiles").select("id,name,active").eq("active", true).order("name"),
       ]);
       return { batches: b.data ?? [], brokers: (p.data ?? []) as Broker[] };
     },
   });
 
-  const { data: batchData, refetch: refetchBatch } = useQuery({
-    queryKey: ["distrib-batch", batchId],
+  const { data: brokerCounts, refetch: refetchCounts } = useQuery({
+    queryKey: ["distrib-broker-counts"],
+    queryFn: fetchBrokerLeadCounts,
+  });
+
+  const { data: unassignedCount, refetch: refetchUnassigned } = useQuery({
+    queryKey: ["distrib-unassigned-count", batchId],
+    enabled: !!batchId,
+    queryFn: () => fetchBatchUnassignedCount(batchId),
+  });
+
+  const { data: batchTotal } = useQuery({
+    queryKey: ["distrib-batch-total", batchId],
     enabled: !!batchId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { count } = await supabase
         .from("leads")
-        .select("id,name,phone,assigned_to_user_id")
-        .eq("import_batch_id", batchId)
-        .order("created_at");
-      return (data ?? []) as LeadRow[];
+        .select("id", { count: "exact", head: true })
+        .eq("import_batch_id", batchId);
+      return count ?? 0;
     },
   });
 
-  const { data: brokerCounts, refetch: refetchCounts } = useQuery({
-    queryKey: ["distrib-broker-counts"],
+  const { data: manualLeads, isFetching: manualFetching, refetch: refetchManual } = useQuery({
+    queryKey: ["distrib-manual-page", batchId, manualPage],
+    enabled: !!batchId,
     queryFn: async () => {
-      const { data } = await supabase.from("leads").select("assigned_to_user_id");
-      const map = new Map<string, number>();
-      (data ?? []).forEach((r: any) => {
-        if (r.assigned_to_user_id) map.set(r.assigned_to_user_id, (map.get(r.assigned_to_user_id) ?? 0) + 1);
-      });
-      return map;
+      const from = manualPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      const { data } = await supabase
+        .from("leads")
+        .select("id,name,phone")
+        .eq("import_batch_id", batchId)
+        .is("assigned_to_user_id", null)
+        .order("created_at")
+        .range(from, to);
+      return (data ?? []) as LeadRow[];
     },
   });
 
@@ -85,20 +120,11 @@ function QuickDistributionPage() {
     },
   });
 
-  // Auto-pick first batch
   useEffect(() => {
     if (!batchId && meta?.batches && meta.batches.length > 0) {
       setBatchId(meta.batches[0].id);
     }
   }, [meta, batchId]);
-
-  if (role !== "admin") return <p className="text-muted-foreground">Acesso restrito ao administrador.</p>;
-
-  const unassignedLeads = useMemo(
-    () => (batchData ?? []).filter((l) => !l.assigned_to_user_id),
-    [batchData],
-  );
-  const totalInBatch = batchData?.length ?? 0;
 
   function toggleBroker(id: string) {
     const n = new Set(selectedBrokers);
@@ -111,110 +137,123 @@ function QuickDistributionPage() {
     setManualSelected(n);
   }
 
-  async function applyAssignments(assignments: { id: string; userId: string }[]) {
-    const byUser = new Map<string, string[]>();
-    assignments.forEach((a) => {
-      const arr = byUser.get(a.userId) ?? [];
-      arr.push(a.id);
-      byUser.set(a.userId, arr);
-    });
-    for (const [userId, ids] of byUser) {
-      const { error } = await supabase.from("leads").update({ assigned_to_user_id: userId }).in("id", ids);
-      if (error) throw error;
-    }
-  }
+  const perBrokerNum = parseInt(perBroker, 10) || 0;
+  const totalPlanned = Math.min(unassignedCount ?? 0, selectedBrokers.size * perBrokerNum);
 
-  async function logDistribution(perBrokerStats: Array<{ id: string; name: string; count: number }>, total: number) {
+  async function logDistribution(stats: Array<{ id: string; name: string; count: number }>, total: number) {
     if (!user || total === 0) return;
     await supabase.from("lead_distributions").insert({
       batch_id: batchId || null,
       admin_id: user.id,
       total_distributed: total,
-      details: perBrokerStats,
+      details: stats,
     });
   }
 
-  async function runQuickDistribute() {
-    if (!batchId) return toast.error("Escolha um lote");
-    if (selectedBrokers.size === 0) return toast.error("Selecione ao menos um corretor");
-    const n = parseInt(perBroker, 10);
-    if (isNaN(n) || n <= 0) return toast.error("Informe a quantidade por corretor");
-
+  async function executeQuick() {
+    setConfirmOpen(null);
+    if (!batchId || selectedBrokers.size === 0 || perBrokerNum <= 0) return;
     setRunning(true);
+    setProgress({ done: 0, total: totalPlanned });
     try {
       const brokers = (meta?.brokers ?? []).filter((b) => selectedBrokers.has(b.id));
-      const pool = [...unassignedLeads];
-      const stats: Array<{ id: string; name: string; count: number }> = [];
-      const assignments: { id: string; userId: string }[] = [];
-
-      for (const broker of brokers) {
-        const slice = pool.splice(0, n);
-        if (slice.length === 0) {
-          stats.push({ id: broker.id, name: broker.name, count: 0 });
-          continue;
-        }
-        slice.forEach((l) => assignments.push({ id: l.id, userId: broker.id }));
-        stats.push({ id: broker.id, name: broker.name, count: slice.length });
-      }
-
-      const total = assignments.length;
-      if (total === 0) {
+      const need = brokers.length * perBrokerNum;
+      const ids = await fetchBatchUnassignedIds(batchId, need);
+      if (ids.length === 0) {
         toast.error("Não há leads sem responsável neste lote");
         return;
       }
+      const stats: Array<{ id: string; name: string; count: number }> = [];
+      const assignments: { id: string; userId: string }[] = [];
+      let cursor = 0;
+      for (const broker of brokers) {
+        const slice = ids.slice(cursor, cursor + perBrokerNum);
+        cursor += slice.length;
+        slice.forEach((id) => assignments.push({ id, userId: broker.id }));
+        stats.push({ id: broker.id, name: broker.name, count: slice.length });
+        if (cursor >= ids.length) break;
+      }
 
-      await applyAssignments(assignments);
-      await logDistribution(stats, total);
+      const total = assignments.length;
+      setProgress({ done: 0, total });
+      await applyAssignments(assignments, {
+        onProgress: (done, t) => setProgress({ done, total: t }),
+      });
+      await logDistribution(stats.filter((s) => s.count > 0), total);
 
+      const remaining = (unassignedCount ?? 0) - total;
       setLastResult({
         total,
         perBroker: stats.filter((s) => s.count > 0),
-        remainingUnassigned: unassignedLeads.length - total,
+        remainingUnassigned: Math.max(0, remaining),
       });
-      toast.success(`${total} leads distribuídos`);
+      toast.success(`${total} leads distribuídos com sucesso`);
       qc.invalidateQueries({ queryKey: ["distrib-history"] });
       qc.invalidateQueries({ queryKey: ["leads-admin"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      refetchBatch();
+      refetchUnassigned();
       refetchCounts();
+      refetchManual();
     } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao distribuir");
+      toast.error(e?.message ?? "Erro ao distribuir leads");
     } finally {
       setRunning(false);
+      setProgress(null);
     }
   }
 
-  async function runManualDistribute() {
-    if (!manualBroker) return toast.error("Escolha o corretor");
-    if (manualSelected.size === 0) return toast.error("Selecione ao menos um lead");
-
+  async function executeManual() {
+    setConfirmOpen(null);
+    if (!manualBroker || manualSelected.size === 0) return;
     setRunning(true);
+    const ids = Array.from(manualSelected);
+    setProgress({ done: 0, total: ids.length });
     try {
-      const ids = Array.from(manualSelected);
       const broker = meta?.brokers.find((b) => b.id === manualBroker);
-      await applyAssignments(ids.map((id) => ({ id, userId: manualBroker })));
+      await applyAssignments(
+        ids.map((id) => ({ id, userId: manualBroker })),
+        { onProgress: (done, total) => setProgress({ done, total }) },
+      );
       await logDistribution([{ id: manualBroker, name: broker?.name ?? "—", count: ids.length }], ids.length);
-
       setLastResult({
         total: ids.length,
         perBroker: [{ id: manualBroker, name: broker?.name ?? "—", count: ids.length }],
-        remainingUnassigned: unassignedLeads.length - ids.length,
+        remainingUnassigned: Math.max(0, (unassignedCount ?? 0) - ids.length),
       });
       toast.success(`${ids.length} leads atribuídos a ${broker?.name}`);
       setManualSelected(new Set());
       qc.invalidateQueries({ queryKey: ["distrib-history"] });
       qc.invalidateQueries({ queryKey: ["leads-admin"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
-      refetchBatch();
+      refetchUnassigned();
       refetchCounts();
+      refetchManual();
     } catch (e: any) {
       toast.error(e?.message ?? "Erro ao atribuir");
     } finally {
       setRunning(false);
+      setProgress(null);
     }
   }
 
-  const adminName = (id: string) => meta?.brokers.find((b) => b.id === id)?.name ?? id.slice(0, 6);
+  function handleQuickClick() {
+    if (!batchId) return toast.error("Escolha um lote");
+    if (selectedBrokers.size === 0) return toast.error("Selecione ao menos um corretor");
+    if (perBrokerNum <= 0) return toast.error("Informe a quantidade por corretor");
+    if (totalPlanned === 0) return toast.error("Não há leads sem responsável neste lote");
+    if (totalPlanned >= CONFIRM_THRESHOLD) setConfirmOpen("quick");
+    else void executeQuick();
+  }
+
+  function handleManualClick() {
+    if (!manualBroker) return toast.error("Escolha o corretor");
+    if (manualSelected.size === 0) return toast.error("Selecione ao menos um lead");
+    if (manualSelected.size >= CONFIRM_THRESHOLD) setConfirmOpen("manual");
+    else void executeManual();
+  }
+
+  const adminName = (id: string) => meta?.brokers.find((b) => b.id === id)?.name ?? id.slice(0, 8);
+  const totalManualPages = Math.max(1, Math.ceil((unassignedCount ?? 0) / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -224,6 +263,8 @@ function QuickDistributionPage() {
           Distribua leads importados de forma equilibrada entre os corretores.
         </p>
       </div>
+
+      {metaLoading && <p className="text-sm text-muted-foreground">Carregando dados…</p>}
 
       <Tabs defaultValue="quick">
         <TabsList>
@@ -238,7 +279,7 @@ function QuickDistributionPage() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1 md:col-span-2">
                 <label className="text-sm font-medium">Lote de importação</label>
-                <Select value={batchId} onValueChange={(v) => { setBatchId(v); setLastResult(null); }}>
+                <Select value={batchId} onValueChange={(v) => { setBatchId(v); setLastResult(null); setManualPage(0); }}>
                   <SelectTrigger><SelectValue placeholder="Escolher lote" /></SelectTrigger>
                   <SelectContent>
                     {(meta?.batches ?? []).map((b: any) => (
@@ -251,18 +292,21 @@ function QuickDistributionPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium">Quantidade por corretor</label>
-                <Input type="number" min={1} placeholder="Ex.: 200" value={perBroker} onChange={(e) => setPerBroker(e.target.value)} />
+                <Input
+                  type="number"
+                  min={1}
+                  max={5000}
+                  placeholder="Ex.: 200"
+                  value={perBroker}
+                  onChange={(e) => setPerBroker(e.target.value)}
+                />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Leads no lote" value={totalInBatch} />
-              <Stat label="Sem responsável" value={unassignedLeads.length} tone="warn" />
-              <Stat
-                label="A distribuir"
-                value={Math.min(unassignedLeads.length, selectedBrokers.size * (parseInt(perBroker, 10) || 0))}
-                tone="primary"
-              />
+              <Stat label="Leads no lote" value={batchTotal ?? 0} />
+              <Stat label="Sem responsável" value={unassignedCount ?? 0} tone="warn" />
+              <Stat label="A distribuir" value={totalPlanned} tone="primary" />
             </div>
           </Card>
 
@@ -277,7 +321,7 @@ function QuickDistributionPage() {
               {(meta?.brokers ?? []).map((b) => {
                 const checked = selectedBrokers.has(b.id);
                 const current = brokerCounts?.get(b.id) ?? 0;
-                const willGet = checked ? Math.min(parseInt(perBroker, 10) || 0, unassignedLeads.length) : 0;
+                const willGet = checked ? Math.min(perBrokerNum, unassignedCount ?? 0) : 0;
                 return (
                   <label key={b.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-muted/30">
                     <Checkbox checked={checked} onCheckedChange={() => toggleBroker(b.id)} />
@@ -285,9 +329,7 @@ function QuickDistributionPage() {
                       <div className="font-medium">{b.name}</div>
                       <div className="text-xs text-muted-foreground">{current} leads atualmente</div>
                     </div>
-                    {checked && willGet > 0 && (
-                      <Badge variant="secondary">+{willGet}</Badge>
-                    )}
+                    {checked && willGet > 0 && <Badge variant="secondary">+{willGet}</Badge>}
                   </label>
                 );
               })}
@@ -295,9 +337,15 @@ function QuickDistributionPage() {
                 <div className="p-6 text-center text-muted-foreground">Nenhum corretor ativo.</div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 border-t p-3">
-              <Button onClick={runQuickDistribute} disabled={running}>
-                <Shuffle className="mr-2 size-4" />
+            <div className="flex items-center justify-between gap-3 border-t p-3">
+              {progress && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin" />
+                  Atribuindo {progress.done} / {progress.total}
+                </div>
+              )}
+              <Button onClick={handleQuickClick} disabled={running} className="ml-auto">
+                {running ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Shuffle className="mr-2 size-4" />}
                 {running ? "Distribuindo…" : "Distribuir agora"}
               </Button>
             </div>
@@ -331,7 +379,7 @@ function QuickDistributionPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Lote</label>
-                <Select value={batchId} onValueChange={setBatchId}>
+                <Select value={batchId} onValueChange={(v) => { setBatchId(v); setManualPage(0); setManualSelected(new Set()); }}>
                   <SelectTrigger><SelectValue placeholder="Escolher lote" /></SelectTrigger>
                   <SelectContent>
                     {(meta?.batches ?? []).map((b: any) => (
@@ -351,7 +399,8 @@ function QuickDistributionPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button onClick={runManualDistribute} disabled={running || manualSelected.size === 0}>
+                  <Button onClick={handleManualClick} disabled={running || manualSelected.size === 0}>
+                    {running ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     Atribuir ({manualSelected.size})
                   </Button>
                 </div>
@@ -363,15 +412,16 @@ function QuickDistributionPage() {
             <div className="flex items-center justify-between border-b p-3 text-sm">
               <div className="flex items-center gap-2">
                 <Checkbox
-                  checked={manualSelected.size > 0 && manualSelected.size === unassignedLeads.length}
+                  checked={(manualLeads ?? []).length > 0 && (manualLeads ?? []).every((l) => manualSelected.has(l.id))}
                   onCheckedChange={(c) => {
-                    if (c) setManualSelected(new Set(unassignedLeads.map((l) => l.id)));
-                    else setManualSelected(new Set());
+                    const n = new Set(manualSelected);
+                    (manualLeads ?? []).forEach((l) => (c ? n.add(l.id) : n.delete(l.id)));
+                    setManualSelected(n);
                   }}
                 />
-                <span>Selecionar todos sem responsável</span>
+                <span>Selecionar página atual</span>
               </div>
-              <span className="text-muted-foreground">{unassignedLeads.length} sem responsável</span>
+              <span className="text-muted-foreground">{unassignedCount ?? 0} sem responsável</span>
             </div>
             <div className="max-h-[480px] overflow-auto">
               <table className="w-full text-sm">
@@ -383,7 +433,12 @@ function QuickDistributionPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {unassignedLeads.map((l) => (
+                  {manualFetching && (
+                    <tr><td colSpan={3} className="py-6 text-center text-muted-foreground">
+                      <Loader2 className="mx-auto size-4 animate-spin" />
+                    </td></tr>
+                  )}
+                  {!manualFetching && (manualLeads ?? []).map((l) => (
                     <tr key={l.id} className="border-t hover:bg-muted/30">
                       <td className="px-3 py-2">
                         <Checkbox checked={manualSelected.has(l.id)} onCheckedChange={() => toggleManual(l.id)} />
@@ -392,13 +447,26 @@ function QuickDistributionPage() {
                       <td className="px-3 py-2 text-muted-foreground">{l.phone ?? "—"}</td>
                     </tr>
                   ))}
-                  {unassignedLeads.length === 0 && (
+                  {!manualFetching && (manualLeads ?? []).length === 0 && (
                     <tr><td colSpan={3} className="py-8 text-center text-muted-foreground">
-                      Nenhum lead sem responsável neste lote.
+                      Nenhum lead sem responsável nesta página.
                     </td></tr>
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t p-3 text-sm">
+              <span className="text-muted-foreground">
+                Página {manualPage + 1} de {totalManualPages}
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={manualPage === 0} onClick={() => setManualPage((p) => Math.max(0, p - 1))}>
+                  Anterior
+                </Button>
+                <Button variant="outline" size="sm" disabled={manualPage + 1 >= totalManualPages} onClick={() => setManualPage((p) => p + 1)}>
+                  Próxima
+                </Button>
+              </div>
             </div>
           </Card>
         </TabsContent>
@@ -454,6 +522,36 @@ function QuickDistributionPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog
+        open={confirmOpen === "quick"}
+        onOpenChange={(o) => !o && setConfirmOpen(null)}
+        title="Confirmar distribuição"
+        description={
+          <span>
+            Você está prestes a distribuir <strong>{totalPlanned}</strong> leads entre{" "}
+            <strong>{selectedBrokers.size}</strong> corretores ({perBrokerNum} por corretor).
+            Essa ação não pode ser desfeita automaticamente.
+          </span>
+        }
+        confirmLabel="Distribuir"
+        loading={running}
+        onConfirm={executeQuick}
+      />
+      <ConfirmDialog
+        open={confirmOpen === "manual"}
+        onOpenChange={(o) => !o && setConfirmOpen(null)}
+        title="Confirmar atribuição manual"
+        description={
+          <span>
+            Você está prestes a atribuir <strong>{manualSelected.size}</strong> leads ao corretor{" "}
+            <strong>{meta?.brokers.find((b) => b.id === manualBroker)?.name ?? "—"}</strong>.
+          </span>
+        }
+        confirmLabel="Atribuir"
+        loading={running}
+        onConfirm={executeManual}
+      />
     </div>
   );
 }
