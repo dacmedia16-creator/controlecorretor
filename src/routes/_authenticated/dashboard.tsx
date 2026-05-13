@@ -78,12 +78,12 @@ function Dashboard() {
 
   // Per-broker performance
   const perBroker = data.brokers.map((b) => {
-    const myLeads = data.leads.filter((l) => l.assigned_to_user_id === b.id);
-    const contactedStatuses = data.statuses
-      .filter((s) => ["Tentativa de contato", "Conversei com o lead", "Lead interessado", "Retorno agendado"].includes(s.name))
-      .map((s) => s.id);
-    const captadoStatusId = data.statuses.find((s) => s.name === "Imóvel captado")?.id;
-    const semRetornoStatusId = data.statuses.find((s) => s.name === "Não atendeu")?.id;
+    const myLeads = generalLeads.filter((l) => l.assigned_to_user_id === b.id);
+    const contactedStatuses = generalStatuses
+      .filter((s: any) => ["Tentativa de contato", "Conversei com o lead", "Lead interessado", "Retorno agendado"].includes(s.name))
+      .map((s: any) => s.id);
+    const captadoStatusId = generalStatuses.find((s: any) => s.name === "Imóvel captado")?.id;
+    const semRetornoStatusId = generalStatuses.find((s: any) => s.name === "Não atendeu")?.id;
     return {
       id: b.id,
       name: b.name,
