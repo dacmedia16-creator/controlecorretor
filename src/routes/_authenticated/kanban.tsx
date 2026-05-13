@@ -115,7 +115,7 @@ function KanbanPage() {
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {data.statuses.map((s) => {
-            const colLeads = visibleLeads.filter((l) => l.status_id === s.id);
+            const colLeads = data.leads.filter((l) => l.status_id === s.id);
             return (
               <Column key={s.id} id={s.id} name={s.name} color={s.color} count={colLeads.length}>
                 {colLeads.map((l) => (
