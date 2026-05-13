@@ -28,10 +28,27 @@ function LeadDetail() {
       const [lead, interactions, statuses, brokers] = await Promise.all([
         supabase.from("leads").select("*").eq("id", id).maybeSingle(),
         supabase.from("lead_interactions").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-        supabase.from("kanban_statuses").select("id,name,color").order("position"),
+        supabase.from("kanban_statuses").select("id,name,color,kanban_type").order("position"),
         supabase.from("profiles").select("id,name"),
       ]);
-      return { lead: lead.data, interactions: interactions.data ?? [], statuses: statuses.data ?? [], brokers: brokers.data ?? [] };
+      const isBulk = !!lead.data?.import_batch_id;
+      let batch: { id: string; name: string; created_at: string } | null = null;
+      if (isBulk && lead.data?.import_batch_id) {
+        const { data: b } = await supabase
+          .from("lead_import_batches")
+          .select("id,name,created_at")
+          .eq("id", lead.data.import_batch_id)
+          .maybeSingle();
+        batch = b ?? null;
+      }
+      return {
+        lead: lead.data,
+        interactions: interactions.data ?? [],
+        statuses: statuses.data ?? [],
+        brokers: brokers.data ?? [],
+        batch,
+        isBulk,
+      };
     },
   });
 
@@ -49,12 +66,25 @@ function LeadDetail() {
     else { toast.success("Status atualizado"); qc.invalidateQueries({ queryKey: ["lead", id] }); }
   }
 
+  const wantedKanban = data.isBulk ? "bulk_leads" : "general";
+  const statusesForLead = data.statuses.filter((s: any) => s.kanban_type === wantedKanban);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Link to="/leads"><Button variant="ghost" size="icon"><ArrowLeft className="size-4" /></Button></Link>
         <h1 className="text-xl font-bold">{lead.name}</h1>
         {status && <Badge style={{ backgroundColor: status.color, color: "white" }}>{status.name}</Badge>}
+        <Badge variant={data.isBulk ? "default" : "secondary"}>
+          {data.isBulk ? "Lead em massa" : "Lead normal"}
+        </Badge>
+        {data.isBulk && data.batch && (
+          <span className="text-xs text-muted-foreground">
+            Lote: <span className="font-medium text-foreground">{data.batch.name}</span>
+            {" · "}importado em {formatDate(data.batch.created_at)}
+            {" · "}Kanban: Leads em Massa
+          </span>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -95,7 +125,7 @@ function LeadDetail() {
             <Select value={lead.status_id ?? ""} onValueChange={changeStatus}>
               <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
               <SelectContent>
-                {data.statuses.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                {statusesForLead.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

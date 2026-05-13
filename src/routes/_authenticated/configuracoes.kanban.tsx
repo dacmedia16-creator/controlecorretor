@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,25 +15,59 @@ export const Route = createFileRoute("/_authenticated/configuracoes/kanban")({
   component: KanbanSettingsPage,
 });
 
+type KanbanType = "general" | "bulk_leads";
+
 function KanbanSettingsPage() {
   const { role } = useAuth();
+  if (role !== "admin") return <p>Acesso restrito.</p>;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold">Configurações do Kanban</h1>
+        <p className="text-sm text-muted-foreground">
+          Cada Kanban tem suas próprias etapas, independentes entre si.
+        </p>
+      </div>
+
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general">Kanban Geral</TabsTrigger>
+          <TabsTrigger value="bulk_leads">Kanban Leads em Massa</TabsTrigger>
+        </TabsList>
+        <TabsContent value="general" className="space-y-4">
+          <KanbanTypeEditor type="general" />
+        </TabsContent>
+        <TabsContent value="bulk_leads" className="space-y-4">
+          <KanbanTypeEditor type="bulk_leads" />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function KanbanTypeEditor({ type }: { type: KanbanType }) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [color, setColor] = useState("#64748b");
+  const queryKey = ["statuses-admin", type];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["statuses-admin"],
-    queryFn: async () => (await supabase.from("kanban_statuses").select("*").order("position")).data ?? [],
+    queryKey,
+    queryFn: async () =>
+      (await supabase
+        .from("kanban_statuses")
+        .select("*")
+        .eq("kanban_type", type)
+        .order("position")).data ?? [],
   });
 
-  if (role !== "admin") return <p>Acesso restrito.</p>;
   if (isLoading || !data) return <div>Carregando…</div>;
-  const list = data;
 
   async function update(id: string, fields: any) {
     const { error } = await supabase.from("kanban_statuses").update(fields).eq("id", id);
     if (error) toast.error(error.message);
-    else qc.invalidateQueries({ queryKey: ["statuses-admin"] });
+    else qc.invalidateQueries({ queryKey });
   }
 
   async function move(idx: number, dir: -1 | 1) {
@@ -43,31 +78,28 @@ function KanbanSettingsPage() {
       supabase.from("kanban_statuses").update({ position: b.position }).eq("id", a.id),
       supabase.from("kanban_statuses").update({ position: a.position }).eq("id", b.id),
     ]);
-    qc.invalidateQueries({ queryKey: ["statuses-admin"] });
+    qc.invalidateQueries({ queryKey });
   }
 
   async function add() {
     if (!name.trim()) return;
     const maxPos = Math.max(0, ...(data ?? []).map((s) => s.position));
-    const { error } = await supabase.from("kanban_statuses").insert({ name: name.trim(), color, position: maxPos + 1 });
+    const { error } = await supabase
+      .from("kanban_statuses")
+      .insert({ name: name.trim(), color, position: maxPos + 1, kanban_type: type } as any);
     if (error) toast.error(error.message);
-    else { setName(""); qc.invalidateQueries({ queryKey: ["statuses-admin"] }); }
+    else { setName(""); qc.invalidateQueries({ queryKey }); }
   }
 
   async function remove(id: string) {
     if (!confirm("Excluir esta etapa? Leads neste status ficarão sem status.")) return;
     const { error } = await supabase.from("kanban_statuses").delete().eq("id", id);
     if (error) toast.error(error.message);
-    else qc.invalidateQueries({ queryKey: ["statuses-admin"] });
+    else qc.invalidateQueries({ queryKey });
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Configurações do Kanban</h1>
-        <p className="text-sm text-muted-foreground">Gerencie as etapas dos seus leads</p>
-      </div>
-
+    <>
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex-1 min-w-[200px]">
@@ -116,9 +148,12 @@ function KanbanSettingsPage() {
                 </td>
               </tr>
             ))}
+            {data.length === 0 && (
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">Nenhuma etapa cadastrada.</td></tr>
+            )}
           </tbody>
         </table>
       </Card>
-    </div>
+    </>
   );
 }
