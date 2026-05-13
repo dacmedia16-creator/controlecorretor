@@ -28,10 +28,27 @@ function LeadDetail() {
       const [lead, interactions, statuses, brokers] = await Promise.all([
         supabase.from("leads").select("*").eq("id", id).maybeSingle(),
         supabase.from("lead_interactions").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
-        supabase.from("kanban_statuses").select("id,name,color").order("position"),
+        supabase.from("kanban_statuses").select("id,name,color,kanban_type").order("position"),
         supabase.from("profiles").select("id,name"),
       ]);
-      return { lead: lead.data, interactions: interactions.data ?? [], statuses: statuses.data ?? [], brokers: brokers.data ?? [] };
+      const isBulk = !!lead.data?.import_batch_id;
+      let batch: { id: string; name: string; created_at: string } | null = null;
+      if (isBulk && lead.data?.import_batch_id) {
+        const { data: b } = await supabase
+          .from("lead_import_batches")
+          .select("id,name,created_at")
+          .eq("id", lead.data.import_batch_id)
+          .maybeSingle();
+        batch = b ?? null;
+      }
+      return {
+        lead: lead.data,
+        interactions: interactions.data ?? [],
+        statuses: statuses.data ?? [],
+        brokers: brokers.data ?? [],
+        batch,
+        isBulk,
+      };
     },
   });
 
