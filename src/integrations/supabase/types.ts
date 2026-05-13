@@ -20,6 +20,7 @@ export type Database = {
           color: string
           created_at: string
           id: string
+          kanban_type: string
           name: string
           position: number
         }
@@ -28,6 +29,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          kanban_type?: string
           name: string
           position: number
         }
@@ -36,6 +38,7 @@ export type Database = {
           color?: string
           created_at?: string
           id?: string
+          kanban_type?: string
           name?: string
           position?: number
         }
