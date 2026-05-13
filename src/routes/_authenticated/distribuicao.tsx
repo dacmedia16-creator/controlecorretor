@@ -177,7 +177,9 @@ function QuickDistributionPage() {
 
       const total = assignments.length;
       setProgress({ done: 0, total });
+      const distributedStatusId = await fetchBulkAssignedStatusId();
       await applyAssignments(assignments, {
+        statusId: distributedStatusId,
         onProgress: (done, t) => setProgress({ done, total: t }),
       });
       await logDistribution(stats.filter((s) => s.count > 0), total);
