@@ -18,15 +18,17 @@ function Dashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
-      const [leads, brokers, statuses] = await Promise.all([
-        supabase.from("leads").select("id, status_id, assigned_to_user_id"),
+      const [leads, brokers, statuses, batches] = await Promise.all([
+        supabase.from("leads").select("id, status_id, assigned_to_user_id, import_batch_id"),
         supabase.from("profiles").select("id, name, active").eq("active", true),
         supabase.from("kanban_statuses").select("id, name"),
+        supabase.from("lead_import_batches").select("id"),
       ]);
       return {
         leads: leads.data ?? [],
         brokers: brokers.data ?? [],
         statuses: statuses.data ?? [],
+        batches: batches.data ?? [],
       };
     },
   });
