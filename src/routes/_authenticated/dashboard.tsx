@@ -43,6 +43,8 @@ function Dashboard() {
   const cards = [
     { label: "Total de leads", value: data.leads.length, icon: ListChecks, color: "bg-blue-500" },
     { label: "Sem responsável", value: data.leads.filter((l) => !l.assigned_to_user_id).length, icon: XCircle, color: "bg-orange-500" },
+    { label: "Importados em massa", value: data.leads.filter((l) => l.import_batch_id).length, icon: Upload, color: "bg-indigo-500" },
+    { label: "Lotes importados", value: data.batches.length, icon: ListChecks, color: "bg-purple-500" },
     { label: "Em contato", value: byStatusName("Tentativa de contato") + byStatusName("Conversei com o lead"), icon: PhoneCall, color: "bg-cyan-500" },
     { label: "Retorno agendado", value: byStatusName("Retorno agendado"), icon: CalendarClock, color: "bg-sky-500" },
     { label: "Imóveis captados", value: byStatusName("Imóvel captado"), icon: Trophy, color: "bg-green-500" },
