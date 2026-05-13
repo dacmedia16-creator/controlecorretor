@@ -91,11 +91,7 @@ function KanbanPage() {
   const activeLead = activeId ? data.leads.find((l) => l.id === activeId) : null;
   const brokerName = (id: string | null) => data.brokers.find((b) => b.id === id)?.name ?? "Sem responsável";
 
-  const visibleLeads = data.leads.filter((l) => {
-    if (fBatch === "all") return true;
-    if (fBatch === "_none_") return !l.import_batch_id;
-    return l.import_batch_id === fBatch;
-  });
+
 
   return (
     <div className="space-y-4">
