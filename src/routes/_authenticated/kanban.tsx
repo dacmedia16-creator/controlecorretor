@@ -89,11 +89,29 @@ function KanbanPage() {
   const activeLead = activeId ? data.leads.find((l) => l.id === activeId) : null;
   const brokerName = (id: string | null) => data.brokers.find((b) => b.id === id)?.name ?? "Sem responsável";
 
+  const visibleLeads = data.leads.filter((l) => {
+    if (fBatch === "all") return true;
+    if (fBatch === "_none_") return !l.import_batch_id;
+    return l.import_batch_id === fBatch;
+  });
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Kanban</h1>
-        <p className="text-sm text-muted-foreground">Arraste os cards para mudar o status</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Kanban</h1>
+          <p className="text-sm text-muted-foreground">Arraste os cards para mudar o status</p>
+        </div>
+        <div className="w-full sm:w-64">
+          <Select value={fBatch} onValueChange={setFBatch}>
+            <SelectTrigger><SelectValue placeholder="Filtrar por lote" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os lotes</SelectItem>
+              <SelectItem value="_none_">Sem lote</SelectItem>
+              {data.batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <DndContext
@@ -104,7 +122,7 @@ function KanbanPage() {
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {data.statuses.map((s) => {
-            const colLeads = data.leads.filter((l) => l.status_id === s.id);
+            const colLeads = visibleLeads.filter((l) => l.status_id === s.id);
             return (
               <Column key={s.id} id={s.id} name={s.name} color={s.color} count={colLeads.length}>
                 {colLeads.map((l) => (
