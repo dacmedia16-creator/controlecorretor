@@ -21,6 +21,7 @@ type Lead = {
   phone: string | null;
   status_id: string | null;
   assigned_to_user_id: string | null;
+  import_batch_id: string | null;
   updated_at: string;
 };
 
