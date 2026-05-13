@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { to: "/distribuicao", label: "Distribuição", icon: Shuffle, roles: ["admin"] },
   { to: "/meus-leads", label: "Meus Leads", icon: Briefcase, roles: ["corretor"] },
   { to: "/kanban", label: "Kanban", icon: Trello, roles: ["admin", "corretor"] },
+  { to: "/kanban-massa", label: "Kanban Leads em Massa", icon: Layers, roles: ["admin", "corretor"] },
   { to: "/corretores", label: "Corretores", icon: Users, roles: ["admin"] },
   { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin"] },
 ];
