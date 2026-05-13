@@ -19,6 +19,7 @@ import {
   fetchBatchUnassignedCount,
   fetchBatchUnassignedIds,
   fetchBrokerLeadCounts,
+  fetchBulkAssignedStatusId,
 } from "@/lib/bulk-leads";
 
 export const Route = createFileRoute("/_authenticated/distribuicao")({
