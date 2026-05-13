@@ -85,7 +85,7 @@ function LeadsPage() {
       </div>
 
       <Card className="p-3">
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-6">
           <Input placeholder="Buscar nome / telefone / e-mail" value={fSearch} onChange={(e) => setFSearch(e.target.value)} />
           <Select value={fBroker} onValueChange={setFBroker}>
             <SelectTrigger><SelectValue placeholder="Corretor" /></SelectTrigger>
@@ -107,6 +107,14 @@ function LeadsPage() {
             <SelectContent>
               <SelectItem value="all">Todas origens</SelectItem>
               {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fBatch} onValueChange={setFBatch}>
+            <SelectTrigger><SelectValue placeholder="Lote" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os lotes</SelectItem>
+              <SelectItem value="_none_">Sem lote</SelectItem>
+              {data?.batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
