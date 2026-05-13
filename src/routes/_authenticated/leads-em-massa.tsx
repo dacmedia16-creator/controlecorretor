@@ -199,9 +199,12 @@ function BulkLeadsPage() {
         .from("kanban_statuses")
         .select("id,name,position")
         .eq("active", true)
+        .eq("kanban_type", "bulk_leads")
         .order("position");
       const novoLead =
-        statuses?.find((s) => s.name.toLowerCase().includes("novo")) ?? statuses?.[0] ?? null;
+        statuses?.find((s) => s.name === "Novo contato em massa") ??
+        statuses?.find((s) => s.name.toLowerCase().includes("novo")) ??
+        statuses?.[0] ?? null;
 
       const { data: batch, error: bErr } = await supabase
         .from("lead_import_batches")
