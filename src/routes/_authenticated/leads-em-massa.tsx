@@ -297,8 +297,9 @@ function BulkLeadsPage() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
-                <Button className="mt-2" onClick={handleProcessText} disabled={!text.trim()}>
-                  <Eye className="mr-2 size-4" /> Processar lista
+                <Button className="mt-2" onClick={handleProcessText} disabled={!text.trim() || scanning}>
+                  {scanning ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Eye className="mr-2 size-4" />}
+                  {scanning ? "Verificando…" : "Processar lista"}
                 </Button>
               </div>
 
@@ -343,10 +344,17 @@ function BulkLeadsPage() {
                     />
                     <span className="text-sm">Selecionar todos os válidos</span>
                   </div>
-                  <Button onClick={handleSave} disabled={saving || summary.selected === 0}>
-                    <Save className="mr-2 size-4" />
-                    {saving ? "Importando…" : `Importar ${summary.selected} leads`}
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    {progress && (
+                      <span className="text-xs text-muted-foreground">
+                        {progress.done.toLocaleString("pt-BR")} / {progress.total.toLocaleString("pt-BR")}
+                      </span>
+                    )}
+                    <Button onClick={handleSaveClick} disabled={saving || summary.selected === 0}>
+                      {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+                      {saving ? "Importando…" : `Importar ${summary.selected} leads`}
+                    </Button>
+                  </div>
                 </div>
                 <div className="max-h-[480px] overflow-auto">
                   <table className="w-full text-sm">
@@ -429,6 +437,22 @@ function BulkLeadsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Confirmar importação"
+        description={
+          <span>
+            Você está prestes a importar{" "}
+            <strong>{summary?.selected.toLocaleString("pt-BR") ?? 0}</strong> leads no lote{" "}
+            <strong>"{batchName.trim()}"</strong>. Confirme antes de prosseguir.
+          </span>
+        }
+        confirmLabel="Importar"
+        loading={saving}
+        onConfirm={handleSave}
+      />
     </div>
   );
 }
