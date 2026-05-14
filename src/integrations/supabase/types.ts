@@ -75,6 +75,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by_user_id: string
+          default_interest_type: string
           duplicate_count: number
           id: string
           imported_count: number
@@ -86,6 +87,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by_user_id: string
+          default_interest_type?: string
           duplicate_count?: number
           id?: string
           imported_count?: number
@@ -97,6 +99,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by_user_id?: string
+          default_interest_type?: string
           duplicate_count?: number
           id?: string
           imported_count?: number

@@ -44,6 +44,7 @@ function BulkLeadsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [batchName, setBatchName] = useState("");
+  const [batchType, setBatchType] = useState<"comprar" | "captar">("comprar");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -195,11 +196,12 @@ function BulkLeadsPage() {
     setSaving(true);
     setProgress({ done: 0, total: toImport.length });
     try {
+      const targetKanbanType = batchType === "captar" ? "bulk_captacao" : "bulk_leads";
       const { data: statuses } = await supabase
         .from("kanban_statuses")
         .select("id,name,position")
         .eq("active", true)
-        .eq("kanban_type", "bulk_leads")
+        .eq("kanban_type", targetKanbanType)
         .order("position");
       const novoLead =
         statuses?.find((s) => s.name === "Novo contato em massa") ??
@@ -216,7 +218,8 @@ function BulkLeadsPage() {
           duplicate_count: summary?.duplicate ?? 0,
           imported_count: 0,
           created_by_user_id: user.id,
-        })
+          default_interest_type: batchType,
+        } as any)
         .select()
         .single();
       if (bErr || !batch) throw bErr ?? new Error("Falha ao criar lote");
@@ -229,6 +232,7 @@ function BulkLeadsPage() {
         source: (r.source || "Importação em massa").slice(0, 120),
         general_notes: r.notes ? r.notes.slice(0, 1000) : null,
         status_id: novoLead?.id ?? null,
+        interest_type: batchType,
         created_by_user_id: user.id,
         import_batch_id: batch.id,
       }));
@@ -282,13 +286,34 @@ function BulkLeadsPage() {
 
         <TabsContent value="import" className="space-y-4">
           <Card className="space-y-3 p-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Nome do lote *</label>
-              <Input
-                placeholder="Ex.: Lista captação Zona Sul Maio"
-                value={batchName}
-                onChange={(e) => setBatchName(e.target.value)}
-              />
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Nome do lote *</label>
+                <Input
+                  placeholder="Ex.: Lista captação Zona Sul Maio"
+                  value={batchName}
+                  onChange={(e) => setBatchName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Tipo do lote *</label>
+                <div className="inline-flex rounded-md border p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setBatchType("comprar")}
+                    className={`px-3 py-1.5 text-sm rounded ${batchType === "comprar" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >
+                    Compra/Aluguel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchType("captar")}
+                    className={`px-3 py-1.5 text-sm rounded ${batchType === "captar" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >
+                    Captação
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

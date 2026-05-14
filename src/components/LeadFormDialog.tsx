@@ -50,17 +50,28 @@ export function LeadFormDialog({
     setForm(lead ? { ...empty, ...lead } : empty);
   }, [lead, open]);
 
+  const isCaptacao = form.interest_type === "captar";
+  const targetKanbanType = isCaptacao ? "general_captacao" : "general";
+
   useEffect(() => {
     if (!open) return;
-    // Cadastro manual: somente status do Kanban geral
+    // Carrega status do Kanban correspondente ao tipo de interesse
     supabase.from("kanban_statuses").select("id,name,position")
-      .eq("active", true).eq("kanban_type", "general").order("position")
-      .then(({ data }) => setStatuses(data ?? []));
+      .eq("active", true).eq("kanban_type", targetKanbanType).order("position")
+      .then(({ data }) => {
+        setStatuses(data ?? []);
+        // Se o status atual não pertence ao Kanban correto, limpa
+        setForm((f) => {
+          if (!f.status_id) return f;
+          if ((data ?? []).some((s) => s.id === f.status_id)) return f;
+          return { ...f, status_id: null };
+        });
+      });
     if (isAdmin) {
       supabase.from("profiles").select("id,name").eq("active", true).order("name")
         .then(({ data }) => setBrokers(data ?? []));
     }
-  }, [open, isAdmin]);
+  }, [open, isAdmin, targetKanbanType]);
 
   function update<K extends keyof Lead>(k: K, v: Lead[K]) {
     setForm((f) => ({ ...f, [k]: v }));

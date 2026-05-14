@@ -6,13 +6,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-// removed unused select import
 import { whatsappUrl } from "@/lib/constants";
 import { MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/kanban")({
-  component: KanbanPage,
+export const Route = createFileRoute("/_authenticated/kanban-captacao")({
+  component: KanbanCaptacaoPage,
 });
 
 type Lead = {
@@ -25,27 +24,27 @@ type Lead = {
   updated_at: string;
 };
 
-function KanbanPage() {
+function KanbanCaptacaoPage() {
   const { user, role } = useAuth();
   const qc = useQueryClient();
+  const queryKey = ["kanban-captacao", user?.id, role];
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["kanban", user?.id, role],
+    queryKey,
     enabled: !!user,
     queryFn: async () => {
       let q = supabase
         .from("leads")
         .select("id,name,phone,status_id,assigned_to_user_id,import_batch_id,updated_at")
         .is("import_batch_id", null)
-        .or("interest_type.is.null,interest_type.neq.captar");
+        .eq("interest_type", "captar");
       if (role === "corretor") q = q.or(`assigned_to_user_id.eq.${user!.id},created_by_user_id.eq.${user!.id}`);
-      const [leads, statuses, brokers, lastInter, batches] = await Promise.all([
+      const [leads, statuses, brokers, lastInter] = await Promise.all([
         q.order("updated_at", { ascending: false }),
-        supabase.from("kanban_statuses").select("id,name,color,position").eq("active", true).eq("kanban_type", "general").order("position"),
+        supabase.from("kanban_statuses").select("id,name,color,position").eq("active", true).eq("kanban_type", "general_captacao").order("position"),
         supabase.from("profiles").select("id,name"),
         supabase.from("lead_interactions").select("lead_id, created_at, next_follow_up_date").order("created_at", { ascending: false }),
-        supabase.from("lead_import_batches").select("id,name").order("created_at", { ascending: false }),
       ]);
       const lastByLead = new Map<string, { last: string; next: string | null }>();
       (lastInter.data ?? []).forEach((i) => {
@@ -55,7 +54,6 @@ function KanbanPage() {
         leads: (leads.data ?? []) as Lead[],
         statuses: statuses.data ?? [],
         brokers: brokers.data ?? [],
-        batches: batches.data ?? [],
         lastByLead,
       };
     },
@@ -71,20 +69,15 @@ function KanbanPage() {
     const lead = data?.leads.find((l) => l.id === leadId);
     if (!lead || lead.status_id === newStatusId) return;
 
-    // optimistic
-    qc.setQueryData<any>(["kanban", user?.id, role], (old: any) => {
+    qc.setQueryData<any>(queryKey, (old: any) => {
       if (!old) return old;
       return { ...old, leads: old.leads.map((l: Lead) => l.id === leadId ? { ...l, status_id: newStatusId } : l) };
     });
 
     const { error } = await supabase.from("leads").update({ status_id: newStatusId }).eq("id", leadId);
-    if (error) {
-      toast.error(error.message);
-      qc.invalidateQueries({ queryKey: ["kanban", user?.id, role] });
-    } else {
-      toast.success("Status atualizado");
-      qc.invalidateQueries({ queryKey: ["kanban", user?.id, role] });
-    }
+    if (error) toast.error(error.message);
+    else toast.success("Status atualizado");
+    qc.invalidateQueries({ queryKey });
   }
 
   if (isLoading || !data) return <div>Carregando…</div>;
@@ -92,15 +85,11 @@ function KanbanPage() {
   const activeLead = activeId ? data.leads.find((l) => l.id === activeId) : null;
   const brokerName = (id: string | null) => data.brokers.find((b) => b.id === id)?.name ?? "Sem responsável";
 
-
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Kanban</h1>
-          <p className="text-sm text-muted-foreground">Leads cadastrados manualmente. Arraste para mudar o status.</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Kanban Captação</h1>
+        <p className="text-sm text-muted-foreground">Leads de captação de imóveis. Arraste para mudar a etapa.</p>
       </div>
 
       <DndContext
@@ -142,10 +131,7 @@ function KanbanPage() {
 function Column({ id, name, color, count, children }: { id: string; name: string; color: string; count: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div
-      ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col rounded-lg bg-muted/40 p-2 ${isOver ? "ring-2 ring-primary" : ""}`}
-    >
+    <div ref={setNodeRef} className={`flex w-72 shrink-0 flex-col rounded-lg bg-muted/40 p-2 ${isOver ? "ring-2 ring-primary" : ""}`}>
       <div className="mb-2 flex items-center justify-between px-2 py-1">
         <div className="flex items-center gap-2">
           <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
