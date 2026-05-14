@@ -109,7 +109,8 @@ function BulkKanbanPage() {
         .select(
           "id,name,phone,status_id,assigned_to_user_id,import_batch_id,city,neighborhood,source,updated_at",
         )
-        .not("import_batch_id", "is", null);
+        .not("import_batch_id", "is", null)
+        .or("interest_type.is.null,interest_type.neq.captar");
       if (role === "corretor") q = q.eq("assigned_to_user_id", user!.id);
       const [leads, statuses, brokers, lastInter, batches] = await Promise.all([
         q.order("updated_at", { ascending: false }).limit(2000),
