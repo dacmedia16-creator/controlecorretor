@@ -196,11 +196,12 @@ function BulkLeadsPage() {
     setSaving(true);
     setProgress({ done: 0, total: toImport.length });
     try {
+      const targetKanbanType = batchType === "captar" ? "bulk_captacao" : "bulk_leads";
       const { data: statuses } = await supabase
         .from("kanban_statuses")
         .select("id,name,position")
         .eq("active", true)
-        .eq("kanban_type", "bulk_leads")
+        .eq("kanban_type", targetKanbanType)
         .order("position");
       const novoLead =
         statuses?.find((s) => s.name === "Novo contato em massa") ??
@@ -217,7 +218,8 @@ function BulkLeadsPage() {
           duplicate_count: summary?.duplicate ?? 0,
           imported_count: 0,
           created_by_user_id: user.id,
-        })
+          default_interest_type: batchType,
+        } as any)
         .select()
         .single();
       if (bErr || !batch) throw bErr ?? new Error("Falha ao criar lote");
@@ -230,6 +232,7 @@ function BulkLeadsPage() {
         source: (r.source || "Importação em massa").slice(0, 120),
         general_notes: r.notes ? r.notes.slice(0, 1000) : null,
         status_id: novoLead?.id ?? null,
+        interest_type: batchType,
         created_by_user_id: user.id,
         import_batch_id: batch.id,
       }));
