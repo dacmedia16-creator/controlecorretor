@@ -44,6 +44,7 @@ function BulkLeadsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [batchName, setBatchName] = useState("");
+  const [batchType, setBatchType] = useState<"comprar" | "captar">("comprar");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [saving, setSaving] = useState(false);
