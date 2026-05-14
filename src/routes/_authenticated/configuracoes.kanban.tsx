@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_authenticated/configuracoes/kanban")({
   component: KanbanSettingsPage,
 });
 
-type KanbanType = "general" | "bulk_leads";
+type KanbanType = "general" | "bulk_leads" | "general_captacao" | "bulk_captacao";
 
 function KanbanSettingsPage() {
   const { role } = useAuth();
@@ -32,15 +32,15 @@ function KanbanSettingsPage() {
 
       <Tabs defaultValue="general">
         <TabsList>
-          <TabsTrigger value="general">Kanban Geral</TabsTrigger>
-          <TabsTrigger value="bulk_leads">Kanban Leads em Massa</TabsTrigger>
+          <TabsTrigger value="general">Compra</TabsTrigger>
+          <TabsTrigger value="bulk_leads">Compra em Massa</TabsTrigger>
+          <TabsTrigger value="general_captacao">Captação</TabsTrigger>
+          <TabsTrigger value="bulk_captacao">Captação em Massa</TabsTrigger>
         </TabsList>
-        <TabsContent value="general" className="space-y-4">
-          <KanbanTypeEditor type="general" />
-        </TabsContent>
-        <TabsContent value="bulk_leads" className="space-y-4">
-          <KanbanTypeEditor type="bulk_leads" />
-        </TabsContent>
+        <TabsContent value="general" className="space-y-4"><KanbanTypeEditor type="general" /></TabsContent>
+        <TabsContent value="bulk_leads" className="space-y-4"><KanbanTypeEditor type="bulk_leads" /></TabsContent>
+        <TabsContent value="general_captacao" className="space-y-4"><KanbanTypeEditor type="general_captacao" /></TabsContent>
+        <TabsContent value="bulk_captacao" className="space-y-4"><KanbanTypeEditor type="bulk_captacao" /></TabsContent>
       </Tabs>
     </div>
   );
