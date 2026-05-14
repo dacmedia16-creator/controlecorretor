@@ -286,13 +286,34 @@ function BulkLeadsPage() {
 
         <TabsContent value="import" className="space-y-4">
           <Card className="space-y-3 p-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Nome do lote *</label>
-              <Input
-                placeholder="Ex.: Lista captação Zona Sul Maio"
-                value={batchName}
-                onChange={(e) => setBatchName(e.target.value)}
-              />
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Nome do lote *</label>
+                <Input
+                  placeholder="Ex.: Lista captação Zona Sul Maio"
+                  value={batchName}
+                  onChange={(e) => setBatchName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Tipo do lote *</label>
+                <div className="inline-flex rounded-md border p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setBatchType("comprar")}
+                    className={`px-3 py-1.5 text-sm rounded ${batchType === "comprar" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >
+                    Compra/Aluguel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchType("captar")}
+                    className={`px-3 py-1.5 text-sm rounded ${batchType === "captar" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >
+                    Captação
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
