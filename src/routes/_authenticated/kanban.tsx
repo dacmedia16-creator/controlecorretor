@@ -37,7 +37,8 @@ function KanbanPage() {
       let q = supabase
         .from("leads")
         .select("id,name,phone,status_id,assigned_to_user_id,import_batch_id,updated_at")
-        .is("import_batch_id", null);
+        .is("import_batch_id", null)
+        .or("interest_type.is.null,interest_type.neq.captar");
       if (role === "corretor") q = q.or(`assigned_to_user_id.eq.${user!.id},created_by_user_id.eq.${user!.id}`);
       const [leads, statuses, brokers, lastInter, batches] = await Promise.all([
         q.order("updated_at", { ascending: false }),
