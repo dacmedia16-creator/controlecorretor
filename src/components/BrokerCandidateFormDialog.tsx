@@ -41,7 +41,8 @@ export function BrokerCandidateFormDialog({
   onOpenChange: (v: boolean) => void;
   candidate?: Candidate | null;
 }) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isAdmin = role === "admin";
   const qc = useQueryClient();
   const [form, setForm] = useState<Candidate>(empty);
   const [saving, setSaving] = useState(false);
