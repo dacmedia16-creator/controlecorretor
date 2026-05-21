@@ -169,7 +169,7 @@ function Column({ id, name, color, count, children }: { id: string; name: string
   );
 }
 
-function CandidateCard({ cand }: { cand: Candidate }) {
+function CandidateCard({ cand, respName }: { cand: Candidate; respName: string | null }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: cand.id });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
   return (
@@ -177,6 +177,7 @@ function CandidateCard({ cand }: { cand: Candidate }) {
       <Link to="/recrutamento/$id" params={{ id: cand.id }} onPointerDown={(e) => e.stopPropagation()} className="font-medium hover:underline">{cand.name}</Link>
       <div className="text-xs text-muted-foreground">{cand.phone ?? "Sem telefone"}</div>
       {cand.city && <div className="text-[11px] text-muted-foreground">📍 {cand.city}</div>}
+      {respName && <div className="text-[11px] text-muted-foreground">👤 {respName}</div>}
       {cand.phone && (
         <a href={whatsappUrl(cand.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <Badge variant="outline" className="mt-2"><MessageCircle className="mr-1 size-3" />WhatsApp</Badge>
