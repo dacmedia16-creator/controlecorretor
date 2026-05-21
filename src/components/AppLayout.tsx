@@ -46,7 +46,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <nav className="flex-1 space-y-1 p-3">
           {items.map((it) => {
-            const active = path === it.to || path.startsWith(it.to + "/");
+            const matches = path === it.to || path.startsWith(it.to + "/");
+            const hasMoreSpecific = items.some(
+              (other) =>
+                other.to !== it.to &&
+                other.to.length > it.to.length &&
+                (path === other.to || path.startsWith(other.to + "/"))
+            );
+            const active = matches && !hasMoreSpecific;
             return (
               <Link
                 key={it.to}
@@ -95,7 +102,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-4 gap-1 border-t border-border bg-background px-2 py-2">
         {items.slice(0, 4).map((it) => {
-          const active = path === it.to || path.startsWith(it.to + "/");
+          const matches = path === it.to || path.startsWith(it.to + "/");
+          const hasMoreSpecific = items.some(
+            (other) =>
+              other.to !== it.to &&
+              other.to.length > it.to.length &&
+              (path === other.to || path.startsWith(other.to + "/"))
+          );
+          const active = matches && !hasMoreSpecific;
           return (
             <Link
               key={it.to}
