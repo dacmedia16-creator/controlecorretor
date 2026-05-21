@@ -183,6 +183,23 @@ export function BrokerCandidateFormDialog({
               </SelectContent>
             </Select>
           </div>
+          {isAdmin && (
+            <div className="md:col-span-2">
+              <Label>Recrutador responsável</Label>
+              <Select
+                value={form.assigned_to_user_id ?? "__none"}
+                onValueChange={(v) => setForm({ ...form, assigned_to_user_id: v === "__none" ? null : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Sem responsável</SelectItem>
+                  {(recruiters ?? []).map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name || r.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="md:col-span-2">
             <Label>Observações</Label>
             <Textarea rows={3} value={form.general_notes ?? ""} onChange={(e) => setForm({ ...form, general_notes: e.target.value })} />
