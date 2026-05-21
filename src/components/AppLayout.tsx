@@ -44,6 +44,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className="font-semibold">BrokerFlow</div>
             <div className="text-xs text-sidebar-foreground/60">CRM Imobiliário</div>
           </div>
+          <FollowUpSidebar className="text-sidebar-foreground hover:bg-sidebar-accent" />
           <NotificationBell className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
 
