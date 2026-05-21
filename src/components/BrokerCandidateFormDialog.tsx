@@ -62,6 +62,25 @@ export function BrokerCandidateFormDialog({
         .order("position")).data ?? [],
   });
 
+  const { data: recruiters } = useQuery({
+    queryKey: ["recruiters-and-admins"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id,role")
+        .in("role", ["recrutador", "admin"]);
+      const ids = Array.from(new Set((roles ?? []).map((r) => r.user_id)));
+      if (ids.length === 0) return [];
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id,name,email")
+        .in("id", ids)
+        .order("name");
+      return profs ?? [];
+    },
+  });
+
   async function save() {
     if (!form.name.trim()) {
       toast.error("Nome é obrigatório");
