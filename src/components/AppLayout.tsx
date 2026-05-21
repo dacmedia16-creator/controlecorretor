@@ -92,10 +92,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Building2 className="size-5" />
           <span className="font-semibold">BrokerFlow</span>
         </div>
-        <Button variant="ghost" size="sm" className="text-sidebar-foreground" onClick={signOut}>
-          <LogOut className="size-4" />
-        </Button>
-      </div>
+        <div className="flex items-center gap-1">
+          <NotificationBell className="text-sidebar-foreground" />
+          <Button variant="ghost" size="sm" className="text-sidebar-foreground" onClick={signOut}>
+            <LogOut className="size-4" />
+          </Button>
+        </div>
 
       <main className="flex-1 pb-20 pt-14 md:pt-0 md:pb-0">
         <div className="mx-auto w-full max-w-7xl p-4 md:p-8">{children}</div>
