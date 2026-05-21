@@ -39,10 +39,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
             <Building2 className="size-5" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="font-semibold">BrokerFlow</div>
             <div className="text-xs text-sidebar-foreground/60">CRM Imobiliário</div>
           </div>
+          <NotificationBell className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
