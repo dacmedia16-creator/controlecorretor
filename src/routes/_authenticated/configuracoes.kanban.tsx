@@ -19,29 +19,34 @@ type KanbanType = "general" | "bulk_leads" | "general_captacao" | "bulk_captacao
 
 function KanbanSettingsPage() {
   const { role } = useAuth();
-  if (role !== "admin") return <p>Acesso restrito.</p>;
+  if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
+
+  const isRecruiterOnly = role === "recrutador";
+  const defaultTab = isRecruiterOnly ? "broker_recruitment" : "general";
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Configurações do Kanban</h1>
         <p className="text-sm text-muted-foreground">
-          Cada Kanban tem suas próprias etapas, independentes entre si.
+          {isRecruiterOnly
+            ? "Gerencie as etapas do funil de recrutamento."
+            : "Cada Kanban tem suas próprias etapas, independentes entre si."}
         </p>
       </div>
 
-      <Tabs defaultValue="general">
+      <Tabs defaultValue={defaultTab}>
         <TabsList>
-          <TabsTrigger value="general">Compra</TabsTrigger>
-          <TabsTrigger value="bulk_leads">Compra em Massa</TabsTrigger>
-          <TabsTrigger value="general_captacao">Captação</TabsTrigger>
-          <TabsTrigger value="bulk_captacao">Captação em Massa</TabsTrigger>
+          {!isRecruiterOnly && <TabsTrigger value="general">Compra</TabsTrigger>}
+          {!isRecruiterOnly && <TabsTrigger value="bulk_leads">Compra em Massa</TabsTrigger>}
+          {!isRecruiterOnly && <TabsTrigger value="general_captacao">Captação</TabsTrigger>}
+          {!isRecruiterOnly && <TabsTrigger value="bulk_captacao">Captação em Massa</TabsTrigger>}
           <TabsTrigger value="broker_recruitment">Recrutamento</TabsTrigger>
         </TabsList>
-        <TabsContent value="general" className="space-y-4"><KanbanTypeEditor type="general" /></TabsContent>
-        <TabsContent value="bulk_leads" className="space-y-4"><KanbanTypeEditor type="bulk_leads" /></TabsContent>
-        <TabsContent value="general_captacao" className="space-y-4"><KanbanTypeEditor type="general_captacao" /></TabsContent>
-        <TabsContent value="bulk_captacao" className="space-y-4"><KanbanTypeEditor type="bulk_captacao" /></TabsContent>
+        {!isRecruiterOnly && <TabsContent value="general" className="space-y-4"><KanbanTypeEditor type="general" /></TabsContent>}
+        {!isRecruiterOnly && <TabsContent value="bulk_leads" className="space-y-4"><KanbanTypeEditor type="bulk_leads" /></TabsContent>}
+        {!isRecruiterOnly && <TabsContent value="general_captacao" className="space-y-4"><KanbanTypeEditor type="general_captacao" /></TabsContent>}
+        {!isRecruiterOnly && <TabsContent value="bulk_captacao" className="space-y-4"><KanbanTypeEditor type="bulk_captacao" /></TabsContent>}
         <TabsContent value="broker_recruitment" className="space-y-4"><KanbanTypeEditor type="broker_recruitment" /></TabsContent>
       </Tabs>
     </div>
