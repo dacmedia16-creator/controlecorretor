@@ -4,8 +4,9 @@ import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import type { AppRole } from "@/lib/auth";
 
-type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles: ("admin" | "corretor")[] };
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles: AppRole[] };
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"] },
@@ -17,9 +18,11 @@ const NAV: NavItem[] = [
   { to: "/kanban-massa", label: "Kanban Compra em Massa", icon: Layers, roles: ["admin", "corretor"] },
   { to: "/kanban-captacao", label: "Kanban Captação", icon: Home, roles: ["admin", "corretor"] },
   { to: "/kanban-captacao-massa", label: "Kanban Captação em Massa", icon: Key, roles: ["admin", "corretor"] },
-  { to: "/recrutamento", label: "Recrutamento", icon: UserPlus, roles: ["admin"] },
+  { to: "/recrutamento/dashboard", label: "Dashboard Recrutamento", icon: LayoutDashboard, roles: ["recrutador"] },
+  { to: "/recrutamento", label: "Recrutamento", icon: UserPlus, roles: ["admin", "recrutador"] },
+  { to: "/recrutamento/kanban", label: "Kanban Recrutamento", icon: Trello, roles: ["recrutador"] },
   { to: "/corretores", label: "Corretores", icon: Users, roles: ["admin"] },
-  { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin"] },
+  { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin", "recrutador"] },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
