@@ -20,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/recrutamento/")({
 function RecrutamentoPage() {
   const { role } = useAuth();
   const isAdmin = role === "admin";
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [openNew, setOpenNew] = useState(false);
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
