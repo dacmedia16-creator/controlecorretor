@@ -104,6 +104,7 @@ function CandidateDetailPage() {
             <Info label="CRECI">{c.creci ?? "—"}</Info>
             <Info label="Experiência">{c.years_experience != null ? `${c.years_experience} anos` : "—"}</Info>
             <Info label="Origem">{labelOf(SOURCES, c.source)}</Info>
+            <Info label="Responsável">{c.assigned_to_user_id ? profileName(c.assigned_to_user_id) : "—"}</Info>
             <Info label="LinkedIn">
               {c.linkedin_url ? <a className="text-primary hover:underline" href={c.linkedin_url} target="_blank" rel="noreferrer">Abrir</a> : "—"}
             </Info>
