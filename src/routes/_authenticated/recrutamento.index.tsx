@@ -170,7 +170,22 @@ function RecrutamentoPage() {
                     {st ? <Badge style={{ backgroundColor: st.color, color: "white" }}>{st.name}</Badge> : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-3 py-2 text-xs">
-                    {resp ? (resp.name || resp.email) : <span className="text-muted-foreground">—</span>}
+                    {isAdmin ? (
+                      <Select
+                        value={c.assigned_to_user_id ?? "__none"}
+                        onValueChange={(v) => assignRecruiter(c.id, v === "__none" ? null : v)}
+                      >
+                        <SelectTrigger className="h-8 w-[160px] text-xs">
+                          <SelectValue placeholder="Atribuir" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Sem responsável</SelectItem>
+                          {(recruiters ?? []).map((r) => (
+                            <SelectItem key={r.id} value={r.id}>{r.name || r.email}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : resp ? (resp.name || resp.email) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(c.updated_at)}</td>
                   <td className="px-3 py-2">
