@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 import type { AppRole } from "@/lib/auth";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles: AppRole[] };
 
