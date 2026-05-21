@@ -48,6 +48,11 @@ export function useRecruiterNotifications() {
     return localStorage.getItem(SOUND_KEY) !== "false";
   });
   const initialized = useRef(false);
+  const soundEnabledRef = useRef(soundEnabled);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
 
   const enabled = !!user && (role === "recrutador" || role === "admin" || role === "corretor");
 
@@ -73,7 +78,7 @@ export function useRecruiterNotifications() {
   useEffect(() => {
     if (!enabled || !user) return;
     const channel = supabase
-      .channel("recruiter-notifications-" + user.id)
+      .channel("recruiter-notifications-" + user.id + "-" + Math.random().toString(36).slice(2, 8))
       .on(
         "postgres_changes",
         {
@@ -87,7 +92,7 @@ export function useRecruiterNotifications() {
           setItems((prev) => [n, ...prev].slice(0, 30));
           if (initialized.current) {
             toast.info(n.message, { duration: 6000 });
-            if (soundEnabled) playBeep();
+            if (soundEnabledRef.current) playBeep();
           }
         },
       )
@@ -95,7 +100,7 @@ export function useRecruiterNotifications() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [enabled, user, soundEnabled]);
+  }, [enabled, user]);
 
   const unreadCount = items.filter((i) => !i.read).length;
 
