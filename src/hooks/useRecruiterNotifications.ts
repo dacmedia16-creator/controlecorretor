@@ -49,7 +49,7 @@ export function useRecruiterNotifications() {
   });
   const initialized = useRef(false);
 
-  const enabled = !!user && (role === "recrutador" || role === "admin");
+  const enabled = !!user && (role === "recrutador" || role === "admin" || role === "corretor");
 
   const fetchAll = useCallback(async () => {
     if (!user) return;
