@@ -6,7 +6,8 @@ import { toast } from "sonner";
 export type RecruiterNotification = {
   id: string;
   user_id: string;
-  candidate_id: string;
+  candidate_id: string | null;
+  lead_id: string | null;
   type: string;
   message: string;
   read: boolean;
