@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 import type { AppRole } from "@/lib/auth";
 import { NotificationBell } from "@/components/NotificationBell";
+import { FollowUpSidebar } from "@/components/FollowUpSidebar";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles: AppRole[] };
 
