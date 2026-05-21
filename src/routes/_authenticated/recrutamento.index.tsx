@@ -43,6 +43,32 @@ function RecrutamentoPage() {
     },
   });
 
+  const { data: recruiters } = useQuery({
+    queryKey: ["recruiters-and-admins"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data: roles } = await supabase
+        .from("user_roles").select("user_id,role").in("role", ["recrutador", "admin"]);
+      const ids = Array.from(new Set((roles ?? []).map((r) => r.user_id)));
+      if (ids.length === 0) return [] as { id: string; name: string; email: string }[];
+      const { data: profs } = await supabase
+        .from("profiles").select("id,name,email").in("id", ids).order("name");
+      return (profs ?? []) as { id: string; name: string; email: string }[];
+    },
+  });
+
+  async function assignRecruiter(candidateId: string, userId: string | null) {
+    const { error } = await supabase
+      .from("broker_candidates")
+      .update({ assigned_to_user_id: userId })
+      .eq("id", candidateId);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Responsável atualizado");
+      qc.invalidateQueries({ queryKey: ["broker-candidates"] });
+    }
+  }
+
   if (isLoading || !data) return <div>Carregando…</div>;
 
   const term = search.trim().toLowerCase();
