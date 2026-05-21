@@ -1,82 +1,97 @@
 ## Objetivo
 
-Separar leads de **captação de imóveis** dos leads de **compra/aluguel** em dois fluxos independentes, com etapas (colunas do Kanban) próprias para cada um, mantendo o que já existe (Kanban geral, Kanban Leads em Massa) sem quebrar nada.
+Criar um funil de **Recrutamento de Corretores** (candidatos a entrar na equipe), com Kanban próprio, totalmente isolado do módulo de Leads. Só admin gerencia.
 
-## Conceito
+## Por que tabela separada (e não reaproveitar `leads`)
 
-Hoje `kanban_type` aceita `general` e `bulk_leads`. Vamos expandir para suportar a dimensão "tipo de negócio":
-
-- `general` → leads manuais de compra/venda/aluguel (fluxo atual)
-- `general_captacao` → leads manuais de captação de imóvel (novo)
-- `bulk_leads` → leads importados em massa de compra (fluxo atual)
-- `bulk_captacao` → leads importados em massa de captação (novo)
-
-O campo `interest_type` (`captar` vs `comprar/vender/alugar`) continua existindo no lead e passa a **determinar** em qual Kanban o lead vive. A trigger `enforce_lead_status_kanban_type` será atualizada para validar essa correspondência.
+- Campos diferentes: CRECI, anos de experiência, currículo, pretensão, cidade de atuação, LinkedIn.
+- RLS diferente: candidatos não são "atribuídos" a corretores — só admin vê.
+- Pipeline curto e simples — não precisa carregar regras de leads (import em massa, distribuição, interações comerciais, captação de imóvel etc).
+- Evita poluir o trigger `enforce_lead_status_kanban_type` com mais um tipo.
 
 ## Mudanças no banco
 
-1. **Seed de novos status** em `kanban_statuses`:
-   - `general_captacao`: Novo contato → Avaliação agendada → Avaliação feita → Proposta de exclusividade → Contrato de captação assinado → Imóvel publicado → Perdido
-   - `bulk_captacao`: Novo contato em massa → WhatsApp enviado → Aguardando resposta → Avaliação agendada → Captado → Sem interesse → Número inválido
-2. **Atualizar** `enforce_lead_status_kanban_type` para também considerar `interest_type = 'captar'` ao decidir qual conjunto de status é válido.
-3. **Adicionar** coluna `default_interest_type` em `lead_import_batches` (`'comprar' | 'captar'`) para registrar o tipo do lote.
+### 1. Nova tabela `broker_candidates`
+Campos de domínio:
+- `name`, `email`, `phone`, `phone_normalized`
+- `city`, `creci`, `years_experience` (int), `linkedin_url`, `resume_url`
+- `source` (indicação, site, Instagram, etc — mesma lista de `SOURCES`)
+- `status_id` → referencia `kanban_statuses` filtrando `kanban_type='broker_recruitment'`
+- `general_notes`
+- `hired_user_id` (uuid, opcional) — quando contratado, aponta para o `profiles.id` criado
+- `created_by_user_id`, `created_at`, `updated_at`
+
+Triggers:
+- `set_updated_at`
+- `set_phone_normalized`
+- Novo `log_broker_status_change` → grava em `broker_candidate_interactions`
+
+### 2. Nova tabela `broker_candidate_interactions`
+- `candidate_id`, `user_id`, `interaction_type` (ligacao, whatsapp, email, entrevista, observacao, status_change), `notes`, `next_follow_up_date`, `created_at`
+
+### 3. Extensão de `kanban_statuses`
+Adicionar `broker_recruitment` na lista de `kanban_type` aceitos. Seed inicial:
+1. Primeiro contato
+2. Entrevista marcada
+3. Entrevista realizada
+4. Contratado
+5. Reprovado (inativo)
+
+### 4. RLS
+Ambas as tabelas: **somente admin** (`has_role(auth.uid(),'admin')`) para SELECT/INSERT/UPDATE/DELETE.
 
 ## Mudanças no frontend
 
 ### Menu lateral (`AppLayout.tsx`)
-Agrupar em duas seções:
-- **Compra/Venda/Aluguel:** Kanban, Kanban Leads em Massa
-- **Captação:** Kanban Captação, Kanban Captação em Massa
+Nova seção/entrada visível só para admin:
+- **Recrutamento** → `/recrutamento` (lista) e `/recrutamento/kanban`
 
 ### Novas rotas
-- `src/routes/_authenticated/kanban-captacao.tsx` — clone enxuto do `kanban.tsx` filtrando `interest_type='captar'` e `kanban_type='general_captacao'`
-- `src/routes/_authenticated/kanban-captacao-massa.tsx` — clone enxuto do `kanban-massa.tsx` filtrando `interest_type='captar'` e `kanban_type='bulk_captacao'`
+- `src/routes/_authenticated/recrutamento.tsx` — lista de candidatos (tabela com filtros por status, cidade, source).
+- `src/routes/_authenticated/recrutamento.kanban.tsx` — Kanban com colunas vindas de `kanban_type='broker_recruitment'`, drag-and-drop entre etapas (mesmo padrão do Kanban geral).
+- `src/routes/_authenticated/recrutamento.$id.tsx` — detalhe do candidato: dados, histórico de interações, botão "Registrar interação", botão "Mover etapa", botão "Marcar como contratado".
 
-### Rotas existentes (ajustes mínimos)
-- `kanban.tsx` e `kanban-massa.tsx`: passam a filtrar `interest_type != 'captar'`.
-- `LeadFormDialog.tsx`: ao escolher `interest_type='captar'`, recarrega status com `kanban_type='general_captacao'`; senão `general`.
-- `meus-leads.tsx` e `leads.$id.tsx`: filtro de status passa a depender de `(import_batch_id, interest_type)`.
-- `leads-em-massa.tsx`: ao criar um lote, perguntar **"Tipo deste lote: Compra/Aluguel ou Captação"**, salvar em `default_interest_type`, e usar isso para decidir o `interest_type` e o `status_id` inicial dos leads importados.
-- `distribuicao.tsx`: filtro adicional por tipo do lote (visual apenas).
-- `configuracoes.kanban.tsx`: 4 abas (general / general_captacao / bulk_leads / bulk_captacao).
+### Componentes novos
+- `BrokerCandidateFormDialog.tsx` — criar/editar candidato.
+- `BrokerCandidateInteractionDialog.tsx` — registrar interação (clone enxuto do `InteractionDialog`).
 
-### Dashboard
-Nova seção **Captação** ao lado de **Vendas** com: leads de captação ativos, taxa de conversão, imóveis captados no período, ranking de corretores por captação.
+### Configurações do Kanban
+Adicionar 5ª aba em `configuracoes.kanban.tsx`: **Recrutamento** (`broker_recruitment`), reusando o `KanbanTypeEditor` já existente.
 
-## Permissões
-
-Sem mudança: RLS já filtra por `assigned_to_user_id` para corretor e libera tudo para admin. As novas rotas herdam o mesmo modelo.
-
-## Diagrama de fluxo
-
-```text
-                    ┌──────────────────────────┐
-                    │     interest_type        │
-                    └──────────────────────────┘
-                       /                    \
-              comprar/vender/alugar      captar
-                     │                       │
-        ┌────────────┴────────────┐  ┌───────┴────────────────┐
-        │ Kanban geral            │  │ Kanban Captação        │
-        │ (kanban_type=general)   │  │ (general_captacao)     │
-        └─────────────────────────┘  └────────────────────────┘
-        ┌─────────────────────────┐  ┌────────────────────────┐
-        │ Kanban Leads em Massa   │  │ Kanban Captação Massa  │
-        │ (bulk_leads)            │  │ (bulk_captacao)        │
-        └─────────────────────────┘  └────────────────────────┘
-```
+### Ação "Contratado"
+Quando admin move um candidato para a coluna "Contratado":
+- Dialog confirma e oferece **"Criar acesso de corretor agora"** (opcional, fase 2).
+- Por ora, só atualiza o status e grava `hired_user_id` manualmente se já existir profile. Convite/criação de usuário fica para próxima etapa para não acoplar com `auth.admin`.
 
 ## O que NÃO muda
 
-- Tabela `leads`, `lead_interactions`, `profiles`, RLS, autenticação.
-- Telas de Leads, Meus Leads, Corretores, Distribuição (apenas ganham o filtro por tipo).
-- Histórico de interações e regras de log de mudança de status.
+- Tabela `leads`, `lead_interactions`, fluxos de leads/captação/massa.
+- RLS de leads, autenticação, dashboard atual.
+- Trigger `enforce_lead_status_kanban_type` (broker_recruitment não passa por ela porque usa outra tabela).
 
 ## Ordem de execução
 
-1. Migration: novos seeds + coluna `default_interest_type` + atualização da trigger.
-2. Atualizar `LeadFormDialog` e telas existentes para reconhecer `interest_type='captar'`.
-3. Criar as duas novas rotas de Kanban Captação.
-4. Atualizar fluxo de importação em massa para perguntar o tipo do lote.
-5. Atualizar Dashboard e Configurações de Kanban.
-6. Smoke test: criar lead de captação manual, importar lote de captação, mover cards, conferir que não aparecem no Kanban de compra.
+1. Migration: tabelas `broker_candidates` + `broker_candidate_interactions`, RLS, triggers, ampliar `kanban_type`, seed das 5 colunas.
+2. Atualizar `configuracoes.kanban.tsx` (5ª aba).
+3. Criar rotas `recrutamento`, `recrutamento.kanban`, `recrutamento.$id`.
+4. Criar `BrokerCandidateFormDialog` e `BrokerCandidateInteractionDialog`.
+5. Atualizar menu lateral.
+6. Smoke test: criar candidato, mover entre colunas, registrar interação, marcar como contratado.
+
+## Diagrama
+
+```text
+Recrutamento (admin-only)
+  /recrutamento          → lista
+  /recrutamento/kanban   → Kanban (broker_recruitment)
+  /recrutamento/:id      → detalhe + histórico
+
+broker_candidates ──(status_id)──> kanban_statuses(kanban_type='broker_recruitment')
+broker_candidate_interactions ──(candidate_id)──> broker_candidates
+```
+
+## Próximos passos (fase 2, fora deste plano)
+
+- Convite/criação automática de usuário corretor ao marcar como "Contratado".
+- Upload de currículo via storage.
+- Métricas de recrutamento no Dashboard (candidatos ativos, taxa de contratação, tempo médio por etapa).
