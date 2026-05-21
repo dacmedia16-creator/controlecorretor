@@ -440,6 +440,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_or_recruiter: { Args: { _user_id: string }; Returns: boolean }
       normalize_phone: { Args: { _phone: string }; Returns: string }
     }
     Enums: {
