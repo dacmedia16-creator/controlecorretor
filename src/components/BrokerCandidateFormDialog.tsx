@@ -24,12 +24,14 @@ type Candidate = {
   source: string | null;
   status_id: string | null;
   general_notes: string | null;
+  assigned_to_user_id?: string | null;
 };
 
 const empty: Candidate = {
   name: "", email: "", phone: "", city: "", creci: "",
   years_experience: null, linkedin_url: "", resume_url: "",
   source: null, status_id: null, general_notes: "",
+  assigned_to_user_id: null,
 };
 
 export function BrokerCandidateFormDialog({
