@@ -19,18 +19,23 @@ const TYPES = [
 ];
 
 export function BrokerCandidateInteractionDialog({
-  open, onOpenChange, candidateId,
+  open, onOpenChange, candidateId, defaultType = "ligacao",
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   candidateId: string;
+  defaultType?: string;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [type, setType] = useState("ligacao");
+  const [type, setType] = useState(defaultType);
   const [notes, setNotes] = useState("");
   const [followUp, setFollowUp] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setType(defaultType);
+  }, [open, defaultType]);
 
   async function save() {
     if (!user) return;
