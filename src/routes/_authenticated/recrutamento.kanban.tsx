@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { whatsappUrl } from "@/lib/constants";
 import { MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
