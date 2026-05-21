@@ -1,25 +1,22 @@
-## Atalho para atribuir recrutador na lista
+## Atalho de Observação no card do Kanban
 
-Adicionar, na coluna **Responsável** da tela `/recrutamento`, um atalho inline para o **admin** trocar o recrutador responsável sem precisar abrir o candidato.
+Adicionar, em cada card do kanban de recrutamento, um botão de **Observação** que abre o `BrokerCandidateInteractionDialog` já existente com o tipo pré-selecionado como "Observação".
 
-### Comportamento
+### Mudanças
 
-- **Admin**: a célula "Responsável" vira um `Select` compacto com a lista de recrutadores + admins (mesma query já usada no `BrokerCandidateFormDialog`). Opções:
-  - "Sem responsável" (define `assigned_to_user_id = null`)
-  - Cada recrutador/admin pelo nome
-  - Mudança é salva imediatamente via `update` no `broker_candidates`, com `toast` de sucesso/erro e `invalidateQueries(["broker-candidates"])`.
-- **Recrutador**: continua vendo apenas o nome em texto (sem permissão para reatribuir — já bloqueado pelo trigger `guard_broker_admin_fields`).
+- `src/components/BrokerCandidateInteractionDialog.tsx`
+  - Aceitar prop opcional `defaultType` (default `"ligacao"`).
+  - Inicializar o `useState` do tipo com `defaultType` e resetar para esse valor ao salvar/fechar.
 
-### Arquivos afetados
-
-- `src/routes/_authenticated/recrutamento.index.tsx`
-  - Adicionar query `recruiters-and-admins` (igual à do dialog), habilitada só para admin.
-  - Trocar o texto da coluna "Responsável" por um `Select` inline quando `role === "admin"`.
-  - Função `assignRecruiter(candidateId, userId | null)` que faz o update e invalida a query.
+- `src/routes/_authenticated/recrutamento.kanban.tsx`
+  - No `CandidateCard`, adicionar um botão pequeno "Observação" (ícone `StickyNote` ou `MessageSquare`) ao lado do badge do WhatsApp.
+  - Estado local no card (`obsOpen`) controlando o dialog.
+  - Bloquear o drag no botão (`onPointerDown` stop propagation).
+  - Ao abrir, usa `<BrokerCandidateInteractionDialog defaultType="observacao" candidateId={cand.id} />`.
 
 ### Fora de escopo
 
-- Atribuição em massa (selecionar vários candidatos) — pode ser feita depois se quiser.
-- Mudar o atalho no Kanban — só na lista, conforme a tela do print.
+- Mostrar a última observação no próprio card.
+- Adicionar o mesmo atalho na tela de lista (`/recrutamento`).
 
-Confirma que quero seguir assim?
+Confirma?
