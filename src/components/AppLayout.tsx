@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload, Shuffle, Layers, Home, Key } from "lucide-react";
+import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload, Shuffle, Layers, Home, Key, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -17,6 +17,7 @@ const NAV: NavItem[] = [
   { to: "/kanban-massa", label: "Kanban Compra em Massa", icon: Layers, roles: ["admin", "corretor"] },
   { to: "/kanban-captacao", label: "Kanban Captação", icon: Home, roles: ["admin", "corretor"] },
   { to: "/kanban-captacao-massa", label: "Kanban Captação em Massa", icon: Key, roles: ["admin", "corretor"] },
+  { to: "/recrutamento", label: "Recrutamento", icon: UserPlus, roles: ["admin"] },
   { to: "/corretores", label: "Corretores", icon: Users, roles: ["admin"] },
   { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin"] },
 ];
