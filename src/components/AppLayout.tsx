@@ -95,6 +95,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <span className="font-semibold">BrokerFlow</span>
         </div>
         <div className="flex items-center gap-1">
+          <FollowUpSidebar className="text-sidebar-foreground" />
           <NotificationBell className="text-sidebar-foreground" />
           <Button variant="ghost" size="sm" className="text-sidebar-foreground" onClick={signOut}>
             <LogOut className="size-4" />
