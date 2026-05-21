@@ -173,17 +173,34 @@ function Column({ id, name, color, count, children }: { id: string; name: string
 function CandidateCard({ cand, respName }: { cand: Candidate; respName: string | null }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: cand.id });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
+  const [obsOpen, setObsOpen] = useState(false);
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   return (
     <Card ref={setNodeRef} style={style} {...attributes} {...listeners} className={`p-3 cursor-grab text-sm ${isDragging ? "opacity-40" : ""}`}>
       <Link to="/recrutamento/$id" params={{ id: cand.id }} onPointerDown={(e) => e.stopPropagation()} className="font-medium hover:underline">{cand.name}</Link>
       <div className="text-xs text-muted-foreground">{cand.phone ?? "Sem telefone"}</div>
       {cand.city && <div className="text-[11px] text-muted-foreground">📍 {cand.city}</div>}
       {respName && <div className="text-[11px] text-muted-foreground">👤 {respName}</div>}
-      {cand.phone && (
-        <a href={whatsappUrl(cand.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <Badge variant="outline" className="mt-2"><MessageCircle className="mr-1 size-3" />WhatsApp</Badge>
-        </a>
-      )}
+      <div className="mt-2 flex flex-wrap gap-1">
+        {cand.phone && (
+          <a href={whatsappUrl(cand.phone)} target="_blank" rel="noreferrer" onClick={stop} onPointerDown={stop}>
+            <Badge variant="outline"><MessageCircle className="mr-1 size-3" />WhatsApp</Badge>
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={(e) => { stop(e); setObsOpen(true); }}
+          onPointerDown={stop}
+        >
+          <Badge variant="outline"><StickyNote className="mr-1 size-3" />Observação</Badge>
+        </button>
+      </div>
+      <BrokerCandidateInteractionDialog
+        open={obsOpen}
+        onOpenChange={setObsOpen}
+        candidateId={cand.id}
+        defaultType="observacao"
+      />
     </Card>
   );
 }
