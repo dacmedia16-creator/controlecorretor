@@ -20,7 +20,7 @@ function RecrutamentoPage() {
   const [search, setSearch] = useState("");
   const [openNew, setOpenNew] = useState(false);
 
-  if (role !== "admin") return <p>Acesso restrito.</p>;
+  if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
 
   const { data, isLoading } = useQuery({
     queryKey: ["broker-candidates"],

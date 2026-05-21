@@ -1,97 +1,110 @@
 ## Objetivo
 
-Criar um funil de **Recrutamento de Corretores** (candidatos a entrar na equipe), com Kanban próprio, totalmente isolado do módulo de Leads. Só admin gerencia.
-
-## Por que tabela separada (e não reaproveitar `leads`)
-
-- Campos diferentes: CRECI, anos de experiência, currículo, pretensão, cidade de atuação, LinkedIn.
-- RLS diferente: candidatos não são "atribuídos" a corretores — só admin vê.
-- Pipeline curto e simples — não precisa carregar regras de leads (import em massa, distribuição, interações comerciais, captação de imóvel etc).
-- Evita poluir o trigger `enforce_lead_status_kanban_type` com mais um tipo.
+Criar um novo perfil de usuário **`recrutador`**, com acesso exclusivo ao módulo de Recrutamento de Corretores. O recrutador não vê leads, kanban de compra, captação nem dashboard comercial — só o pipeline de candidatos.
 
 ## Mudanças no banco
 
-### 1. Nova tabela `broker_candidates`
-Campos de domínio:
-- `name`, `email`, `phone`, `phone_normalized`
-- `city`, `creci`, `years_experience` (int), `linkedin_url`, `resume_url`
-- `source` (indicação, site, Instagram, etc — mesma lista de `SOURCES`)
-- `status_id` → referencia `kanban_statuses` filtrando `kanban_type='broker_recruitment'`
-- `general_notes`
-- `hired_user_id` (uuid, opcional) — quando contratado, aponta para o `profiles.id` criado
-- `created_by_user_id`, `created_at`, `updated_at`
+### 1. Ampliar enum `app_role`
+```sql
+ALTER TYPE app_role ADD VALUE 'recrutador';
+```
 
-Triggers:
-- `set_updated_at`
-- `set_phone_normalized`
-- Novo `log_broker_status_change` → grava em `broker_candidate_interactions`
+### 2. Ajustar `handle_new_user`
+Hoje promove o primeiro usuário a `admin` e os demais a `corretor`. Vai passar a respeitar `raw_user_meta_data->>'role'` quando o admin criar o usuário com role explícita. Default continua `corretor`.
 
-### 2. Nova tabela `broker_candidate_interactions`
-- `candidate_id`, `user_id`, `interaction_type` (ligacao, whatsapp, email, entrevista, observacao, status_change), `notes`, `next_follow_up_date`, `created_at`
+### 3. RLS — habilitar acesso do recrutador
+Atualizar as policies das tabelas de recrutamento para aceitar **admin OU recrutador**:
+- `broker_candidates` — policy `admin OR recrutador` para ALL.
+- `broker_candidate_interactions` — idem.
+- `kanban_statuses` — recrutador pode gerenciar (SELECT/INSERT/UPDATE/DELETE) **somente** linhas onde `kanban_type = 'broker_recruitment'`. Admin mantém acesso total.
+- `profiles` — recrutador lê o próprio perfil (já coberto pelo `read all authenticated`).
 
-### 3. Extensão de `kanban_statuses`
-Adicionar `broker_recruitment` na lista de `kanban_type` aceitos. Seed inicial:
-1. Primeiro contato
-2. Entrevista marcada
-3. Entrevista realizada
-4. Contratado
-5. Reprovado (inativo)
+Helper opcional: `is_recruiter_or_admin()` security definer para evitar repetição.
 
-### 4. RLS
-Ambas as tabelas: **somente admin** (`has_role(auth.uid(),'admin')`) para SELECT/INSERT/UPDATE/DELETE.
+### 4. Sem mudanças em `leads`, `lead_interactions`, `lead_import_batches`, `lead_distributions`
+Recrutador não recebe nenhuma policy nessas tabelas → fica invisível para ele.
 
 ## Mudanças no frontend
 
-### Menu lateral (`AppLayout.tsx`)
-Nova seção/entrada visível só para admin:
-- **Recrutamento** → `/recrutamento` (lista) e `/recrutamento/kanban`
+### 1. Tipos
+- `src/lib/auth.tsx`: `AppRole = "admin" | "corretor" | "recrutador"`.
 
-### Novas rotas
-- `src/routes/_authenticated/recrutamento.tsx` — lista de candidatos (tabela com filtros por status, cidade, source).
-- `src/routes/_authenticated/recrutamento.kanban.tsx` — Kanban com colunas vindas de `kanban_type='broker_recruitment'`, drag-and-drop entre etapas (mesmo padrão do Kanban geral).
-- `src/routes/_authenticated/recrutamento.$id.tsx` — detalhe do candidato: dados, histórico de interações, botão "Registrar interação", botão "Mover etapa", botão "Marcar como contratado".
+### 2. Menu (`AppLayout.tsx`)
+Adicionar `roles: ("admin" | "corretor" | "recrutador")[]` em `NavItem`. Para o recrutador, exibir apenas:
+- **Dashboard Recrutamento** → `/recrutamento/dashboard` (novo)
+- **Recrutamento (lista)** → `/recrutamento`
+- **Kanban Recrutamento** → `/recrutamento/kanban`
+- **Configurações de Etapas** → `/configuracoes/kanban` (mas com guarda na própria página, ver abaixo)
 
-### Componentes novos
-- `BrokerCandidateFormDialog.tsx` — criar/editar candidato.
-- `BrokerCandidateInteractionDialog.tsx` — registrar interação (clone enxuto do `InteractionDialog`).
+### 3. Redirect pós-login (`src/routes/index.tsx`)
+```ts
+if (role === "admin") → /dashboard
+else if (role === "recrutador") → /recrutamento/dashboard
+else → /meus-leads
+```
 
-### Configurações do Kanban
-Adicionar 5ª aba em `configuracoes.kanban.tsx`: **Recrutamento** (`broker_recruitment`), reusando o `KanbanTypeEditor` já existente.
+### 4. Nova rota `recrutamento.dashboard.tsx`
+KPIs simples consultando `broker_candidates`:
+- Candidatos ativos (não Reprovado/Contratado)
+- Total por etapa (barras)
+- Contratados no mês
+- Tempo médio entre Primeiro contato → Contratado
+- Atalhos: "Novo candidato", "Abrir Kanban"
 
-### Ação "Contratado"
-Quando admin move um candidato para a coluna "Contratado":
-- Dialog confirma e oferece **"Criar acesso de corretor agora"** (opcional, fase 2).
-- Por ora, só atualiza o status e grava `hired_user_id` manualmente se já existir profile. Convite/criação de usuário fica para próxima etapa para não acoplar com `auth.admin`.
+### 5. Guarda de rotas
+Criar helper `requireRoles(roles[])` ou checagem inline nos `_authenticated/*` que hoje são admin-only (`leads.tsx`, `dashboard.tsx`, `corretores.tsx`, etc.) — se `role === 'recrutador'`, redireciona para `/recrutamento/dashboard`.
 
-## O que NÃO muda
+Rotas de recrutamento: liberar para `admin` e `recrutador`.
 
-- Tabela `leads`, `lead_interactions`, fluxos de leads/captação/massa.
-- RLS de leads, autenticação, dashboard atual.
-- Trigger `enforce_lead_status_kanban_type` (broker_recruitment não passa por ela porque usa outra tabela).
+### 6. Configurações do Kanban (`configuracoes.kanban.tsx`)
+- Admin: vê as 5 abas (general, captação, bulk_leads, bulk_captacao, broker_recruitment).
+- Recrutador: vê **só** a aba "Recrutamento".
+
+### 7. Tela de criação de usuários (admin)
+Na página `/corretores` (ou nova aba "Usuários"):
+- Botão "Novo usuário" → dialog com nome, email, telefone, senha provisória, **select de role** (`corretor` | `recrutador`).
+- Submit chama uma server function `createUser` (`createServerFn` + `supabaseAdmin`) que:
+  1. `supabaseAdmin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name, phone, role } })`
+  2. O trigger `handle_new_user` cria o profile e usa `user_metadata.role` para inserir em `user_roles`.
+- Só admin pode chamar essa server function (checa `has_role(uid,'admin')` no handler).
+
+## Arquivos novos
+
+- `src/routes/_authenticated/recrutamento.dashboard.tsx`
+- `src/lib/users.functions.ts` — server fn `createUser`, `deactivateUser`
+- `src/components/CreateUserDialog.tsx`
+
+## Arquivos alterados
+
+- `supabase/migrations/<novo>.sql` — enum + policies + trigger
+- `src/lib/auth.tsx` — tipo `AppRole`
+- `src/components/AppLayout.tsx` — itens do menu por role
+- `src/routes/index.tsx` — redirect pós-login
+- `src/routes/_authenticated/configuracoes.kanban.tsx` — filtrar abas por role
+- `src/routes/_authenticated/corretores.tsx` — listar/gerenciar usuários, botão "Novo usuário"
+- `src/routes/_authenticated/recrutamento.tsx` / `.kanban.tsx` / `.$id.tsx` — liberar para recrutador
+
+## Detalhes técnicos
+
+- **Enum sem rollback fácil**: `ALTER TYPE ADD VALUE` não pode ser revertido em transação — migration roda em statement separado.
+- **`supabaseAdmin.auth.admin.createUser`** roda só na server function (service role). Nunca expor no cliente.
+- **Trigger `handle_new_user`** precisa ler `NEW.raw_user_meta_data->>'role'` com fallback para `corretor`. Manter regra "primeiro usuário = admin" como segurança caso o metadata venha vazio.
+- **Guarda de UI ≠ segurança**: o que protege de verdade é a RLS. UI guard é só UX.
 
 ## Ordem de execução
 
-1. Migration: tabelas `broker_candidates` + `broker_candidate_interactions`, RLS, triggers, ampliar `kanban_type`, seed das 5 colunas.
-2. Atualizar `configuracoes.kanban.tsx` (5ª aba).
-3. Criar rotas `recrutamento`, `recrutamento.kanban`, `recrutamento.$id`.
-4. Criar `BrokerCandidateFormDialog` e `BrokerCandidateInteractionDialog`.
-5. Atualizar menu lateral.
-6. Smoke test: criar candidato, mover entre colunas, registrar interação, marcar como contratado.
+1. Migration: enum, policies, ajuste do trigger.
+2. `src/lib/auth.tsx` (tipo).
+3. `src/routes/index.tsx` (redirect).
+4. `src/components/AppLayout.tsx` (menu por role).
+5. `recrutamento.dashboard.tsx` (nova).
+6. Guards nas rotas admin-only.
+7. `configuracoes.kanban.tsx` (filtrar abas).
+8. `users.functions.ts` + `CreateUserDialog.tsx` + ajuste em `corretores.tsx`.
+9. Smoke test: admin cria recrutador → recrutador loga → vê só recrutamento → cria candidato → move etapa.
 
-## Diagrama
+## Fora do escopo
 
-```text
-Recrutamento (admin-only)
-  /recrutamento          → lista
-  /recrutamento/kanban   → Kanban (broker_recruitment)
-  /recrutamento/:id      → detalhe + histórico
-
-broker_candidates ──(status_id)──> kanban_statuses(kanban_type='broker_recruitment')
-broker_candidate_interactions ──(candidate_id)──> broker_candidates
-```
-
-## Próximos passos (fase 2, fora deste plano)
-
-- Convite/criação automática de usuário corretor ao marcar como "Contratado".
-- Upload de currículo via storage.
-- Métricas de recrutamento no Dashboard (candidatos ativos, taxa de contratação, tempo médio por etapa).
+- Convite por email (admin define senha provisória, recrutador troca depois pela tela de perfil — fase 2).
+- Desativar/reativar usuário (pode entrar junto com `corretores.tsx` se preferir).
+- Permissão granular por etapa do funil.

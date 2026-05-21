@@ -24,6 +24,7 @@ import { Route as AuthenticatedDistribuicaoRouteImport } from './routes/_authent
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCorretoresRouteImport } from './routes/_authenticated/corretores'
 import { Route as AuthenticatedRecrutamentoKanbanRouteImport } from './routes/_authenticated/recrutamento.kanban'
+import { Route as AuthenticatedRecrutamentoDashboardRouteImport } from './routes/_authenticated/recrutamento.dashboard'
 import { Route as AuthenticatedRecrutamentoIdRouteImport } from './routes/_authenticated/recrutamento.$id'
 import { Route as AuthenticatedLeadsIdRouteImport } from './routes/_authenticated/leads.$id'
 import { Route as AuthenticatedLeadsEmMassaBatchIdRouteImport } from './routes/_authenticated/leads-em-massa.$batchId'
@@ -110,6 +111,12 @@ const AuthenticatedRecrutamentoKanbanRoute =
     path: '/kanban',
     getParentRoute: () => AuthenticatedRecrutamentoRoute,
   } as any)
+const AuthenticatedRecrutamentoDashboardRoute =
+  AuthenticatedRecrutamentoDashboardRouteImport.update({
+    id: '/dashboard',
+    path: '/dashboard',
+    getParentRoute: () => AuthenticatedRecrutamentoRoute,
+  } as any)
 const AuthenticatedRecrutamentoIdRoute =
   AuthenticatedRecrutamentoIdRouteImport.update({
     id: '/$id',
@@ -152,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/leads-em-massa/$batchId': typeof AuthenticatedLeadsEmMassaBatchIdRoute
   '/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
+  '/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
   '/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
 }
 export interface FileRoutesByTo {
@@ -172,6 +180,7 @@ export interface FileRoutesByTo {
   '/leads-em-massa/$batchId': typeof AuthenticatedLeadsEmMassaBatchIdRoute
   '/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
+  '/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
   '/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
 }
 export interface FileRoutesById {
@@ -194,6 +203,7 @@ export interface FileRoutesById {
   '/_authenticated/leads-em-massa/$batchId': typeof AuthenticatedLeadsEmMassaBatchIdRoute
   '/_authenticated/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/_authenticated/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
+  '/_authenticated/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
   '/_authenticated/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
 }
 export interface FileRouteTypes {
@@ -216,6 +226,7 @@ export interface FileRouteTypes {
     | '/leads-em-massa/$batchId'
     | '/leads/$id'
     | '/recrutamento/$id'
+    | '/recrutamento/dashboard'
     | '/recrutamento/kanban'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -236,6 +247,7 @@ export interface FileRouteTypes {
     | '/leads-em-massa/$batchId'
     | '/leads/$id'
     | '/recrutamento/$id'
+    | '/recrutamento/dashboard'
     | '/recrutamento/kanban'
   id:
     | '__root__'
@@ -257,6 +269,7 @@ export interface FileRouteTypes {
     | '/_authenticated/leads-em-massa/$batchId'
     | '/_authenticated/leads/$id'
     | '/_authenticated/recrutamento/$id'
+    | '/_authenticated/recrutamento/dashboard'
     | '/_authenticated/recrutamento/kanban'
   fileRoutesById: FileRoutesById
 }
@@ -373,6 +386,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecrutamentoKanbanRouteImport
       parentRoute: typeof AuthenticatedRecrutamentoRoute
     }
+    '/_authenticated/recrutamento/dashboard': {
+      id: '/_authenticated/recrutamento/dashboard'
+      path: '/dashboard'
+      fullPath: '/recrutamento/dashboard'
+      preLoaderRoute: typeof AuthenticatedRecrutamentoDashboardRouteImport
+      parentRoute: typeof AuthenticatedRecrutamentoRoute
+    }
     '/_authenticated/recrutamento/$id': {
       id: '/_authenticated/recrutamento/$id'
       path: '/$id'
@@ -432,12 +452,15 @@ const AuthenticatedLeadsEmMassaRouteWithChildren =
 
 interface AuthenticatedRecrutamentoRouteChildren {
   AuthenticatedRecrutamentoIdRoute: typeof AuthenticatedRecrutamentoIdRoute
+  AuthenticatedRecrutamentoDashboardRoute: typeof AuthenticatedRecrutamentoDashboardRoute
   AuthenticatedRecrutamentoKanbanRoute: typeof AuthenticatedRecrutamentoKanbanRoute
 }
 
 const AuthenticatedRecrutamentoRouteChildren: AuthenticatedRecrutamentoRouteChildren =
   {
     AuthenticatedRecrutamentoIdRoute: AuthenticatedRecrutamentoIdRoute,
+    AuthenticatedRecrutamentoDashboardRoute:
+      AuthenticatedRecrutamentoDashboardRoute,
     AuthenticatedRecrutamentoKanbanRoute: AuthenticatedRecrutamentoKanbanRoute,
   }
 
