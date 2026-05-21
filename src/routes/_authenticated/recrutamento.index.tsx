@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/recrutamento/")({
 function RecrutamentoPage() {
   const { role } = useAuth();
   const isAdmin = role === "admin";
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [openNew, setOpenNew] = useState(false);
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
@@ -40,6 +42,32 @@ function RecrutamentoPage() {
       };
     },
   });
+
+  const { data: recruiters } = useQuery({
+    queryKey: ["recruiters-and-admins"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data: roles } = await supabase
+        .from("user_roles").select("user_id,role").in("role", ["recrutador", "admin"]);
+      const ids = Array.from(new Set((roles ?? []).map((r) => r.user_id)));
+      if (ids.length === 0) return [] as { id: string; name: string; email: string }[];
+      const { data: profs } = await supabase
+        .from("profiles").select("id,name,email").in("id", ids).order("name");
+      return (profs ?? []) as { id: string; name: string; email: string }[];
+    },
+  });
+
+  async function assignRecruiter(candidateId: string, userId: string | null) {
+    const { error } = await supabase
+      .from("broker_candidates")
+      .update({ assigned_to_user_id: userId })
+      .eq("id", candidateId);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Responsável atualizado");
+      qc.invalidateQueries({ queryKey: ["broker-candidates"] });
+    }
+  }
 
   if (isLoading || !data) return <div>Carregando…</div>;
 
@@ -142,7 +170,22 @@ function RecrutamentoPage() {
                     {st ? <Badge style={{ backgroundColor: st.color, color: "white" }}>{st.name}</Badge> : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-3 py-2 text-xs">
-                    {resp ? (resp.name || resp.email) : <span className="text-muted-foreground">—</span>}
+                    {isAdmin ? (
+                      <Select
+                        value={c.assigned_to_user_id ?? "__none"}
+                        onValueChange={(v) => assignRecruiter(c.id, v === "__none" ? null : v)}
+                      >
+                        <SelectTrigger className="h-8 w-[160px] text-xs">
+                          <SelectValue placeholder="Atribuir" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Sem responsável</SelectItem>
+                          {(recruiters ?? []).map((r) => (
+                            <SelectItem key={r.id} value={r.id}>{r.name || r.email}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : resp ? (resp.name || resp.email) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(c.updated_at)}</td>
                   <td className="px-3 py-2">
