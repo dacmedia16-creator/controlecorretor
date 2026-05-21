@@ -14,6 +14,122 @@ export type Database = {
   }
   public: {
     Tables: {
+      broker_candidate_interactions: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          id: string
+          interaction_result: string | null
+          interaction_type: string
+          next_follow_up_date: string | null
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          id?: string
+          interaction_result?: string | null
+          interaction_type: string
+          next_follow_up_date?: string | null
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          interaction_result?: string | null
+          interaction_type?: string
+          next_follow_up_date?: string | null
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_candidate_interactions_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "broker_candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broker_candidates: {
+        Row: {
+          city: string | null
+          created_at: string
+          created_by_user_id: string
+          creci: string | null
+          email: string | null
+          general_notes: string | null
+          hired_user_id: string | null
+          id: string
+          linkedin_url: string | null
+          name: string
+          phone: string | null
+          phone_normalized: string | null
+          resume_url: string | null
+          source: string | null
+          status_id: string | null
+          updated_at: string
+          years_experience: number | null
+        }
+        Insert: {
+          city?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          creci?: string | null
+          email?: string | null
+          general_notes?: string | null
+          hired_user_id?: string | null
+          id?: string
+          linkedin_url?: string | null
+          name: string
+          phone?: string | null
+          phone_normalized?: string | null
+          resume_url?: string | null
+          source?: string | null
+          status_id?: string | null
+          updated_at?: string
+          years_experience?: number | null
+        }
+        Update: {
+          city?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          creci?: string | null
+          email?: string | null
+          general_notes?: string | null
+          hired_user_id?: string | null
+          id?: string
+          linkedin_url?: string | null
+          name?: string
+          phone?: string | null
+          phone_normalized?: string | null
+          resume_url?: string | null
+          source?: string | null
+          status_id?: string | null
+          updated_at?: string
+          years_experience?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_candidates_hired_user_id_fkey"
+            columns: ["hired_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_candidates_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "kanban_statuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kanban_statuses: {
         Row: {
           active: boolean
