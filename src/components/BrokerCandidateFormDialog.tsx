@@ -100,11 +100,15 @@ export function BrokerCandidateFormDialog({
       status_id: form.status_id || (statuses?.[0]?.id ?? null),
       general_notes: form.general_notes || null,
     };
+    if (isAdmin) {
+      payload.assigned_to_user_id = form.assigned_to_user_id || null;
+    }
     let error;
     if (candidate?.id) {
       ({ error } = await supabase.from("broker_candidates").update(payload).eq("id", candidate.id));
     } else {
       payload.created_by_user_id = user?.id;
+      if (!isAdmin) payload.assigned_to_user_id = user?.id;
       ({ error } = await supabase.from("broker_candidates").insert(payload));
     }
     setSaving(false);
