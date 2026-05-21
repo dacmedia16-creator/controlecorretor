@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 import type { AppRole } from "@/lib/auth";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles: AppRole[] };
 
@@ -38,10 +39,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
             <Building2 className="size-5" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="font-semibold">BrokerFlow</div>
             <div className="text-xs text-sidebar-foreground/60">CRM Imobiliário</div>
           </div>
+          <NotificationBell className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
@@ -90,10 +92,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <Building2 className="size-5" />
           <span className="font-semibold">BrokerFlow</span>
         </div>
-        <Button variant="ghost" size="sm" className="text-sidebar-foreground" onClick={signOut}>
-          <LogOut className="size-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <NotificationBell className="text-sidebar-foreground" />
+          <Button variant="ghost" size="sm" className="text-sidebar-foreground" onClick={signOut}>
+            <LogOut className="size-4" />
+          </Button>
+        </div>
       </div>
+
 
       <main className="flex-1 pb-20 pt-14 md:pt-0 md:pb-0">
         <div className="mx-auto w-full max-w-7xl p-4 md:p-8">{children}</div>
