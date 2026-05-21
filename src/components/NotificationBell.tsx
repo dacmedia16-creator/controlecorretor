@@ -61,29 +61,51 @@ export function NotificationBell({ className }: { className?: string }) {
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">Nenhuma notificação</div>
           ) : (
             <ul className="divide-y">
-              {items.map((n) => (
-                <li key={n.id}>
-                  <Link
-                    to="/recrutamento/$id"
-                    params={{ id: n.candidate_id }}
-                    onClick={() => {
-                      if (!n.read) void markAsRead(n.id);
-                    }}
-                    className={cn(
-                      "block px-3 py-2 text-sm hover:bg-muted",
-                      !n.read && "bg-primary/5",
-                    )}
-                  >
-                    <div className="flex items-start gap-2">
-                      {!n.read && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />}
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">{n.message}</div>
-                        <div className="text-[11px] text-muted-foreground">{formatTime(n.created_at)}</div>
-                      </div>
+              {items.map((n) => {
+                const target = n.lead_id
+                  ? { to: "/leads/$id" as const, params: { id: n.lead_id } }
+                  : n.candidate_id
+                  ? { to: "/recrutamento/$id" as const, params: { id: n.candidate_id } }
+                  : null;
+                const inner = (
+                  <div className="flex items-start gap-2">
+                    {!n.read && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate">{n.message}</div>
+                      <div className="text-[11px] text-muted-foreground">{formatTime(n.created_at)}</div>
                     </div>
-                  </Link>
-                </li>
-              ))}
+                  </div>
+                );
+                const classes = cn(
+                  "block px-3 py-2 text-sm hover:bg-muted",
+                  !n.read && "bg-primary/5",
+                );
+                return (
+                  <li key={n.id}>
+                    {target ? (
+                      <Link
+                        {...target}
+                        onClick={() => {
+                          if (!n.read) void markAsRead(n.id);
+                        }}
+                        className={classes}
+                      >
+                        {inner}
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!n.read) void markAsRead(n.id);
+                        }}
+                        className={cn(classes, "w-full text-left")}
+                      >
+                        {inner}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </ScrollArea>

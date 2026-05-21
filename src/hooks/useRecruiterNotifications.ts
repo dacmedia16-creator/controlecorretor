@@ -6,7 +6,8 @@ import { toast } from "sonner";
 export type RecruiterNotification = {
   id: string;
   user_id: string;
-  candidate_id: string;
+  candidate_id: string | null;
+  lead_id: string | null;
   type: string;
   message: string;
   read: boolean;
@@ -48,7 +49,7 @@ export function useRecruiterNotifications() {
   });
   const initialized = useRef(false);
 
-  const enabled = !!user && (role === "recrutador" || role === "admin");
+  const enabled = !!user && (role === "recrutador" || role === "admin" || role === "corretor");
 
   const fetchAll = useCallback(async () => {
     if (!user) return;

@@ -140,6 +140,24 @@ export type Database = {
           },
         ]
       }
+      follow_up_notification_log: {
+        Row: {
+          interaction_id: string
+          notified_on: string
+          source: string
+        }
+        Insert: {
+          interaction_id: string
+          notified_on: string
+          source: string
+        }
+        Update: {
+          interaction_id?: string
+          notified_on?: string
+          source?: string
+        }
+        Relationships: []
+      }
       kanban_statuses: {
         Row: {
           active: boolean
@@ -402,27 +420,30 @@ export type Database = {
       }
       recruiter_notifications: {
         Row: {
-          candidate_id: string
+          candidate_id: string | null
           created_at: string
           id: string
+          lead_id: string | null
           message: string
           read: boolean
           type: string
           user_id: string
         }
         Insert: {
-          candidate_id: string
+          candidate_id?: string | null
           created_at?: string
           id?: string
+          lead_id?: string | null
           message: string
           read?: boolean
           type?: string
           user_id: string
         }
         Update: {
-          candidate_id?: string
+          candidate_id?: string | null
           created_at?: string
           id?: string
+          lead_id?: string | null
           message?: string
           read?: boolean
           type?: string
@@ -434,6 +455,13 @@ export type Database = {
             columns: ["candidate_id"]
             isOneToOne: false
             referencedRelation: "broker_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recruiter_notifications_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]

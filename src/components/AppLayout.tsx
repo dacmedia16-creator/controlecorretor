@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 import type { AppRole } from "@/lib/auth";
 import { NotificationBell } from "@/components/NotificationBell";
+import { FollowUpSidebar } from "@/components/FollowUpSidebar";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles: AppRole[] };
 
@@ -43,6 +44,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className="font-semibold">BrokerFlow</div>
             <div className="text-xs text-sidebar-foreground/60">CRM Imobiliário</div>
           </div>
+          <FollowUpSidebar className="text-sidebar-foreground hover:bg-sidebar-accent" />
           <NotificationBell className="text-sidebar-foreground hover:bg-sidebar-accent" />
         </div>
 
@@ -93,6 +95,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <span className="font-semibold">BrokerFlow</span>
         </div>
         <div className="flex items-center gap-1">
+          <FollowUpSidebar className="text-sidebar-foreground" />
           <NotificationBell className="text-sidebar-foreground" />
           <Button variant="ghost" size="sm" className="text-sidebar-foreground" onClick={signOut}>
             <LogOut className="size-4" />
