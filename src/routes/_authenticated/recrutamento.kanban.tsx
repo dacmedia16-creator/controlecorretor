@@ -78,6 +78,18 @@ function BrokerKanbanPage() {
 
   if (isLoading || !data) return <div>Carregando…</div>;
   const activeCand = activeId ? data.candidates.find((c) => c.id === activeId) : null;
+  const profileById = new Map(data.profiles.map((p) => [p.id, p]));
+  const assignedOptions = Array.from(
+    new Set(data.candidates.map((c) => c.assigned_to_user_id).filter(Boolean) as string[])
+  )
+    .map((id) => profileById.get(id))
+    .filter(Boolean) as { id: string; name: string; email: string }[];
+
+  const filteredCandidates = isAdmin && assignedFilter !== "all"
+    ? data.candidates.filter((c) =>
+        assignedFilter === "__none" ? !c.assigned_to_user_id : c.assigned_to_user_id === assignedFilter
+      )
+    : data.candidates;
 
   return (
     <div className="space-y-4">
@@ -87,6 +99,18 @@ function BrokerKanbanPage() {
           <p className="text-sm text-muted-foreground">Arraste o candidato para mudar a etapa.</p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && (
+            <Select value={assignedFilter} onValueChange={setAssignedFilter}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os responsáveis</SelectItem>
+                <SelectItem value="__none">Sem responsável</SelectItem>
+                {assignedOptions.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name || p.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button asChild variant="outline"><Link to="/recrutamento">Lista</Link></Button>
           <Button onClick={() => setOpenNew(true)}><Plus className="mr-1 size-4" />Novo candidato</Button>
         </div>
@@ -100,10 +124,16 @@ function BrokerKanbanPage() {
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {data.statuses.map((s) => {
-            const col = data.candidates.filter((c) => c.status_id === s.id);
+            const col = filteredCandidates.filter((c) => c.status_id === s.id);
             return (
               <Column key={s.id} id={s.id} name={s.name} color={s.color} count={col.length}>
-                {col.map((c) => <CandidateCard key={c.id} cand={c} />)}
+                {col.map((c) => (
+                  <CandidateCard
+                    key={c.id}
+                    cand={c}
+                    respName={c.assigned_to_user_id ? (profileById.get(c.assigned_to_user_id)?.name ?? null) : null}
+                  />
+                ))}
               </Column>
             );
           })}
