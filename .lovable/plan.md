@@ -1,11 +1,14 @@
-## Correção
+## Objetivo
+Quando um usuário com papel `recrutador` fizer login (ou abrir a raiz `/`), ele deve ser direcionado automaticamente para `/recrutamento/dashboard` em vez de `/meus-leads`.
 
-**Arquivo:** `src/hooks/useRecruiterNotifications.ts`
+## Causa atual
+- `src/routes/login.tsx` (linha 28) redireciona somente com base em `admin` → `/dashboard`, qualquer outro papel → `/meus-leads`. O papel `recrutador` cai no fallback errado.
+- `src/routes/index.tsx` já trata `recrutador` corretamente, mas o login não passa por lá.
 
-1. Trocar `soundEnabled` por uma `ref` (`soundEnabledRef`) que é atualizada por um `useEffect` separado sempre que o estado mudar. Assim o callback do realtime continua lendo o valor atual, sem precisar recriar o canal.
-2. Remover `soundEnabled` das dependências do `useEffect` que cria o canal — deixar apenas `[enabled, user]`.
-3. Garantir cleanup robusto: `supabase.removeChannel(channel)` já está, mas adicionar guarda para não recriar se `user.id` não mudou (cobre StrictMode/double-invoke em dev).
+## Mudanças
+1. **`src/routes/login.tsx`** — Atualizar o `useEffect` de redirecionamento pós-login para incluir o papel `recrutador`:
+   - `admin` → `/dashboard`
+   - `recrutador` → `/recrutamento/dashboard`
+   - demais (corretor) → `/meus-leads`
 
-**Resultado esperado:** o canal é criado **uma única vez** por usuário logado. Ligar/desligar som não recria a inscrição, eliminando o erro `cannot add postgres_changes callbacks ... after subscribe()`. A página `/recrutamento/dashboard` volta a carregar normalmente.
-
-Sem mudanças em banco, em outros componentes, ou no comportamento visível (sino, badge, som e toast continuam funcionando igual).
+Nenhuma alteração de backend, banco ou outros arquivos é necessária — `index.tsx` já está correto e serve como fallback caso o usuário acesse a raiz.
