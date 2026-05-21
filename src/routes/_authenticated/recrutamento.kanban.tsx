@@ -23,6 +23,7 @@ type Candidate = {
   email: string | null;
   city: string | null;
   status_id: string | null;
+  assigned_to_user_id: string | null;
   updated_at: string;
 };
 
@@ -31,18 +32,25 @@ function BrokerKanbanPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
 
   if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
+  const isAdmin = role === "admin";
 
   const queryKey = ["broker-kanban"];
   const { data, isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
-      const [cands, statuses] = await Promise.all([
-        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,updated_at").order("updated_at", { ascending: false }),
+      const [cands, statuses, profiles] = await Promise.all([
+        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,assigned_to_user_id,updated_at").order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color,position").eq("kanban_type", "broker_recruitment").eq("active", true).order("position"),
+        supabase.from("profiles").select("id,name,email"),
       ]);
-      return { candidates: (cands.data ?? []) as Candidate[], statuses: statuses.data ?? [] };
+      return {
+        candidates: (cands.data ?? []) as Candidate[],
+        statuses: statuses.data ?? [],
+        profiles: profiles.data ?? [],
+      };
     },
   });
 
