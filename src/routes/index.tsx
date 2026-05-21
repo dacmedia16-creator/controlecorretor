@@ -14,6 +14,7 @@ function IndexRedirect() {
     if (loading) return;
     if (!user) nav({ to: "/login" });
     else if (role === "admin") nav({ to: "/dashboard" });
+    else if (role === "recrutador") nav({ to: "/recrutamento/dashboard" });
     else nav({ to: "/meus-leads" });
   }, [loading, user, role, nav]);
 
