@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trello, MessageCircle } from "lucide-react";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
 import { whatsappUrl, labelOf, SOURCES, formatDate } from "@/lib/constants";
@@ -17,31 +18,53 @@ export const Route = createFileRoute("/_authenticated/recrutamento/")({
 
 function RecrutamentoPage() {
   const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [search, setSearch] = useState("");
   const [openNew, setOpenNew] = useState(false);
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
 
   if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
 
   const { data, isLoading } = useQuery({
     queryKey: ["broker-candidates"],
     queryFn: async () => {
-      const [cands, statuses] = await Promise.all([
+      const [cands, statuses, profiles] = await Promise.all([
         supabase.from("broker_candidates").select("*").order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color").eq("kanban_type", "broker_recruitment"),
+        supabase.from("profiles").select("id,name,email"),
       ]);
-      return { candidates: cands.data ?? [], statuses: statuses.data ?? [] };
+      return {
+        candidates: cands.data ?? [],
+        statuses: statuses.data ?? [],
+        profiles: profiles.data ?? [],
+      };
     },
   });
 
   if (isLoading || !data) return <div>Carregando…</div>;
 
   const term = search.trim().toLowerCase();
-  const list = term
-    ? data.candidates.filter((c) =>
-        [c.name, c.email, c.phone, c.city, c.creci].some((v) => v?.toLowerCase().includes(term))
-      )
-    : data.candidates;
   const statusById = new Map(data.statuses.map((s) => [s.id, s]));
+  const profileById = new Map(data.profiles.map((p) => [p.id, p]));
+
+  let list = data.candidates;
+  if (term) {
+    list = list.filter((c) =>
+      [c.name, c.email, c.phone, c.city, c.creci].some((v) => v?.toLowerCase().includes(term))
+    );
+  }
+  if (isAdmin && assignedFilter !== "all") {
+    list = list.filter((c) =>
+      assignedFilter === "__none" ? !c.assigned_to_user_id : c.assigned_to_user_id === assignedFilter
+    );
+  }
+
+  // Set of users that already appear as responsible (used to populate filter)
+  const assignedOptions = Array.from(
+    new Set(data.candidates.map((c) => c.assigned_to_user_id).filter(Boolean) as string[])
+  )
+    .map((id) => profileById.get(id))
+    .filter(Boolean) as { id: string; name: string; email: string }[];
 
   return (
     <div className="space-y-4">
@@ -58,8 +81,25 @@ function RecrutamentoPage() {
         </div>
       </div>
 
-      <Card className="p-3">
-        <Input placeholder="Buscar por nome, e-mail, telefone, cidade ou CRECI" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Card className="p-3 flex flex-wrap gap-3">
+        <Input
+          className="flex-1 min-w-[240px]"
+          placeholder="Buscar por nome, e-mail, telefone, cidade ou CRECI"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {isAdmin && (
+          <Select value={assignedFilter} onValueChange={setAssignedFilter}>
+            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os responsáveis</SelectItem>
+              <SelectItem value="__none">Sem responsável</SelectItem>
+              {assignedOptions.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.name || p.email}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </Card>
 
       <Card className="overflow-hidden">
@@ -72,6 +112,7 @@ function RecrutamentoPage() {
               <th className="px-3 py-2">CRECI</th>
               <th className="px-3 py-2">Origem</th>
               <th className="px-3 py-2">Etapa</th>
+              <th className="px-3 py-2">Responsável</th>
               <th className="px-3 py-2">Atualizado</th>
               <th className="px-3 py-2"></th>
             </tr>
@@ -79,6 +120,7 @@ function RecrutamentoPage() {
           <tbody>
             {list.map((c) => {
               const st = c.status_id ? statusById.get(c.status_id) : null;
+              const resp = c.assigned_to_user_id ? profileById.get(c.assigned_to_user_id) : null;
               return (
                 <tr key={c.id} className="border-t">
                   <td className="px-3 py-2">
@@ -99,6 +141,9 @@ function RecrutamentoPage() {
                   <td className="px-3 py-2">
                     {st ? <Badge style={{ backgroundColor: st.color, color: "white" }}>{st.name}</Badge> : <span className="text-muted-foreground">—</span>}
                   </td>
+                  <td className="px-3 py-2 text-xs">
+                    {resp ? (resp.name || resp.email) : <span className="text-muted-foreground">—</span>}
+                  </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(c.updated_at)}</td>
                   <td className="px-3 py-2">
                     <Button asChild size="sm" variant="ghost"><Link to="/recrutamento/$id" params={{ id: c.id }}>Abrir</Link></Button>
@@ -107,7 +152,7 @@ function RecrutamentoPage() {
               );
             })}
             {list.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">Nenhum candidato cadastrado.</td></tr>
+              <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">Nenhum candidato cadastrado.</td></tr>
             )}
           </tbody>
         </table>
