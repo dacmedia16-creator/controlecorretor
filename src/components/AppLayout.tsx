@@ -98,6 +98,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <LogOut className="size-4" />
           </Button>
         </div>
+      </div>
+
 
       <main className="flex-1 pb-20 pt-14 md:pt-0 md:pb-0">
         <div className="mx-auto w-full max-w-7xl p-4 md:p-8">{children}</div>
