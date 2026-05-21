@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { whatsappUrl } from "@/lib/constants";
 import { MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ type Candidate = {
   email: string | null;
   city: string | null;
   status_id: string | null;
+  assigned_to_user_id: string | null;
   updated_at: string;
 };
 
@@ -31,18 +33,25 @@ function BrokerKanbanPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
 
   if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
+  const isAdmin = role === "admin";
 
   const queryKey = ["broker-kanban"];
   const { data, isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
-      const [cands, statuses] = await Promise.all([
-        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,updated_at").order("updated_at", { ascending: false }),
+      const [cands, statuses, profiles] = await Promise.all([
+        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,assigned_to_user_id,updated_at").order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color,position").eq("kanban_type", "broker_recruitment").eq("active", true).order("position"),
+        supabase.from("profiles").select("id,name,email"),
       ]);
-      return { candidates: (cands.data ?? []) as Candidate[], statuses: statuses.data ?? [] };
+      return {
+        candidates: (cands.data ?? []) as Candidate[],
+        statuses: statuses.data ?? [],
+        profiles: profiles.data ?? [],
+      };
     },
   });
 
@@ -69,6 +78,18 @@ function BrokerKanbanPage() {
 
   if (isLoading || !data) return <div>Carregando…</div>;
   const activeCand = activeId ? data.candidates.find((c) => c.id === activeId) : null;
+  const profileById = new Map(data.profiles.map((p) => [p.id, p]));
+  const assignedOptions = Array.from(
+    new Set(data.candidates.map((c) => c.assigned_to_user_id).filter(Boolean) as string[])
+  )
+    .map((id) => profileById.get(id))
+    .filter(Boolean) as { id: string; name: string; email: string }[];
+
+  const filteredCandidates = isAdmin && assignedFilter !== "all"
+    ? data.candidates.filter((c) =>
+        assignedFilter === "__none" ? !c.assigned_to_user_id : c.assigned_to_user_id === assignedFilter
+      )
+    : data.candidates;
 
   return (
     <div className="space-y-4">
@@ -78,6 +99,18 @@ function BrokerKanbanPage() {
           <p className="text-sm text-muted-foreground">Arraste o candidato para mudar a etapa.</p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && (
+            <Select value={assignedFilter} onValueChange={setAssignedFilter}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os responsáveis</SelectItem>
+                <SelectItem value="__none">Sem responsável</SelectItem>
+                {assignedOptions.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name || p.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button asChild variant="outline"><Link to="/recrutamento">Lista</Link></Button>
           <Button onClick={() => setOpenNew(true)}><Plus className="mr-1 size-4" />Novo candidato</Button>
         </div>
@@ -91,10 +124,16 @@ function BrokerKanbanPage() {
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {data.statuses.map((s) => {
-            const col = data.candidates.filter((c) => c.status_id === s.id);
+            const col = filteredCandidates.filter((c) => c.status_id === s.id);
             return (
               <Column key={s.id} id={s.id} name={s.name} color={s.color} count={col.length}>
-                {col.map((c) => <CandidateCard key={c.id} cand={c} />)}
+                {col.map((c) => (
+                  <CandidateCard
+                    key={c.id}
+                    cand={c}
+                    respName={c.assigned_to_user_id ? (profileById.get(c.assigned_to_user_id)?.name ?? null) : null}
+                  />
+                ))}
               </Column>
             );
           })}
@@ -130,7 +169,7 @@ function Column({ id, name, color, count, children }: { id: string; name: string
   );
 }
 
-function CandidateCard({ cand }: { cand: Candidate }) {
+function CandidateCard({ cand, respName }: { cand: Candidate; respName: string | null }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: cand.id });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
   return (
@@ -138,6 +177,7 @@ function CandidateCard({ cand }: { cand: Candidate }) {
       <Link to="/recrutamento/$id" params={{ id: cand.id }} onPointerDown={(e) => e.stopPropagation()} className="font-medium hover:underline">{cand.name}</Link>
       <div className="text-xs text-muted-foreground">{cand.phone ?? "Sem telefone"}</div>
       {cand.city && <div className="text-[11px] text-muted-foreground">📍 {cand.city}</div>}
+      {respName && <div className="text-[11px] text-muted-foreground">👤 {respName}</div>}
       {cand.phone && (
         <a href={whatsappUrl(cand.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <Badge variant="outline" className="mt-2"><MessageCircle className="mr-1 size-3" />WhatsApp</Badge>

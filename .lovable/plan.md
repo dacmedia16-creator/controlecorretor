@@ -1,30 +1,37 @@
-## Problema
+## Atribuir candidatos a um recrutador específico
 
-`/recrutamento/kanban` e `/recrutamento/:id` não abrem — mostram o conteúdo da lista (`/recrutamento`).
+Adicionar o conceito de "recrutador responsável" para cada candidato. Admin vê todos; cada recrutador vê só os candidatos atribuídos a ele (ou criados por ele).
 
-**Causa:** no roteamento flat do TanStack, `recrutamento.tsx` virou layout-pai das rotas `recrutamento.kanban.tsx` e `recrutamento.$id.tsx`, mas não renderiza `<Outlet />`. Resultado: a URL casa, mas o filho não tem onde renderizar.
+### 1. Banco de dados (migration)
 
-## Correção
+- Adicionar coluna `assigned_to_user_id uuid` em `broker_candidates` (nullable, FK lógico para `profiles.id`).
+- Índice em `assigned_to_user_id`.
+- Atualizar RLS de `broker_candidates`:
+  - Admin: acesso total (como hoje).
+  - Recrutador: vê/edita apenas linhas onde `assigned_to_user_id = auth.uid()` **ou** `created_by_user_id = auth.uid()`.
+  - Apenas admin pode alterar `assigned_to_user_id` (trigger `guard_broker_admin_fields`, espelhando `guard_lead_admin_fields`).
+- Atualizar RLS de `broker_candidate_interactions` para seguir a visibilidade do candidato pai.
 
-Separar o layout do conteúdo da lista:
+### 2. Cadastro/edição de candidato
 
-1. **Criar `src/routes/_authenticated/recrutamento.index.tsx`** com o conteúdo atual da lista (componente `RecrutamentoPage`), declarando `createFileRoute("/_authenticated/recrutamento/")`.
+- No `BrokerCandidateFormDialog`, adicionar campo "Recrutador responsável" (select com a lista de usuários com role `recrutador` + admins).
+  - Visível só para admin.
+  - Recrutador que cria um candidato: `assigned_to_user_id` é setado automaticamente para ele mesmo.
 
-2. **Substituir `src/routes/_authenticated/recrutamento.tsx`** por um layout puro que apenas renderiza `<Outlet />`:
-   ```tsx
-   import { createFileRoute, Outlet } from "@tanstack/react-router";
-   export const Route = createFileRoute("/_authenticated/recrutamento")({
-     component: () => <Outlet />,
-   });
-   ```
+### 3. Lista de recrutamento (`/recrutamento`)
 
-3. **Não mexer** em `recrutamento.kanban.tsx`, `recrutamento.$id.tsx` nem `recrutamento.dashboard.tsx` — eles passam a renderizar corretamente dentro do Outlet.
+- Nova coluna "Responsável" na tabela.
+- Filtro por responsável (visível só para admin).
+- Para recrutador, a query já vem filtrada pela RLS.
 
-4. **Não editar** `src/routeTree.gen.ts` — é gerado automaticamente.
+### 4. Kanban de recrutamento
 
-## Validação
+- Mostrar o nome do responsável no card.
+- Filtro por responsável no topo (admin).
 
-- `/recrutamento` → lista de candidatos
-- `/recrutamento/kanban` → kanban
-- `/recrutamento/dashboard` → dashboard
-- `/recrutamento/<id>` → detalhe do candidato
+### Pontos em aberto (decidir depois, se quiser)
+
+- Distribuição em massa estilo `/distribuicao` — fica para um segundo passo se você sentir falta.
+- Reatribuir candidato em lote a partir da lista — pode entrar junto ou depois.
+
+Confirma que sigo com esse plano? Se quiser, já incluo a reatribuição em lote a partir da lista também.

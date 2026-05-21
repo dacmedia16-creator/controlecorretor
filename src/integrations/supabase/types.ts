@@ -57,6 +57,7 @@ export type Database = {
       }
       broker_candidates: {
         Row: {
+          assigned_to_user_id: string | null
           city: string | null
           created_at: string
           created_by_user_id: string
@@ -76,6 +77,7 @@ export type Database = {
           years_experience: number | null
         }
         Insert: {
+          assigned_to_user_id?: string | null
           city?: string | null
           created_at?: string
           created_by_user_id?: string
@@ -95,6 +97,7 @@ export type Database = {
           years_experience?: number | null
         }
         Update: {
+          assigned_to_user_id?: string | null
           city?: string | null
           created_at?: string
           created_by_user_id?: string
@@ -114,6 +117,13 @@ export type Database = {
           years_experience?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "broker_candidates_assigned_to_user_id_fkey"
+            columns: ["assigned_to_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "broker_candidates_hired_user_id_fkey"
             columns: ["hired_user_id"]

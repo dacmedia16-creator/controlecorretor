@@ -24,12 +24,14 @@ type Candidate = {
   source: string | null;
   status_id: string | null;
   general_notes: string | null;
+  assigned_to_user_id?: string | null;
 };
 
 const empty: Candidate = {
   name: "", email: "", phone: "", city: "", creci: "",
   years_experience: null, linkedin_url: "", resume_url: "",
   source: null, status_id: null, general_notes: "",
+  assigned_to_user_id: null,
 };
 
 export function BrokerCandidateFormDialog({
@@ -39,7 +41,8 @@ export function BrokerCandidateFormDialog({
   onOpenChange: (v: boolean) => void;
   candidate?: Candidate | null;
 }) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isAdmin = role === "admin";
   const qc = useQueryClient();
   const [form, setForm] = useState<Candidate>(empty);
   const [saving, setSaving] = useState(false);
@@ -57,6 +60,25 @@ export function BrokerCandidateFormDialog({
         .eq("kanban_type", "broker_recruitment")
         .eq("active", true)
         .order("position")).data ?? [],
+  });
+
+  const { data: recruiters } = useQuery({
+    queryKey: ["recruiters-and-admins"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id,role")
+        .in("role", ["recrutador", "admin"]);
+      const ids = Array.from(new Set((roles ?? []).map((r) => r.user_id)));
+      if (ids.length === 0) return [];
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id,name,email")
+        .in("id", ids)
+        .order("name");
+      return profs ?? [];
+    },
   });
 
   async function save() {
@@ -78,11 +100,15 @@ export function BrokerCandidateFormDialog({
       status_id: form.status_id || (statuses?.[0]?.id ?? null),
       general_notes: form.general_notes || null,
     };
+    if (isAdmin) {
+      payload.assigned_to_user_id = form.assigned_to_user_id || null;
+    }
     let error;
     if (candidate?.id) {
       ({ error } = await supabase.from("broker_candidates").update(payload).eq("id", candidate.id));
     } else {
       payload.created_by_user_id = user?.id;
+      if (!isAdmin) payload.assigned_to_user_id = user?.id;
       ({ error } = await supabase.from("broker_candidates").insert(payload));
     }
     setSaving(false);
@@ -157,6 +183,23 @@ export function BrokerCandidateFormDialog({
               </SelectContent>
             </Select>
           </div>
+          {isAdmin && (
+            <div className="md:col-span-2">
+              <Label>Recrutador responsável</Label>
+              <Select
+                value={form.assigned_to_user_id ?? "__none"}
+                onValueChange={(v) => setForm({ ...form, assigned_to_user_id: v === "__none" ? null : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Sem responsável</SelectItem>
+                  {(recruiters ?? []).map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name || r.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="md:col-span-2">
             <Label>Observações</Label>
             <Textarea rows={3} value={form.general_notes ?? ""} onChange={(e) => setForm({ ...form, general_notes: e.target.value })} />
