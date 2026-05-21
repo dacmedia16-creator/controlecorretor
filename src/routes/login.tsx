@@ -25,7 +25,13 @@ function LoginPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      nav({ to: role === "admin" ? "/dashboard" : "/meus-leads" });
+      const dest =
+        role === "admin"
+          ? "/dashboard"
+          : role === "recrutador"
+            ? "/recrutamento/dashboard"
+            : "/meus-leads";
+      nav({ to: dest });
     }
   }, [user, role, loading, nav]);
 
