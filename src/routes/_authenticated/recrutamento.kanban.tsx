@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { whatsappUrl } from "@/lib/constants";
-import { MessageCircle, Plus } from "lucide-react";
+import { MessageCircle, Plus, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
+import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateInteractionDialog";
 
 export const Route = createFileRoute("/_authenticated/recrutamento/kanban")({
   component: BrokerKanbanPage,
