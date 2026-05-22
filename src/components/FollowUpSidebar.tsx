@@ -88,7 +88,7 @@ export function FollowUpSidebar({ className }: { className?: string }) {
   );
 }
 
-function Row({ item, onAction }: { item: FollowUpItem; onAction: () => void }) {
+function Row({ item, onAction, onWhats }: { item: FollowUpItem; onAction: () => void; onWhats: () => void }) {
   const wa = whatsappUrl(item.phone);
   const detailHref =
     item.source === "lead"
