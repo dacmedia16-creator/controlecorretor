@@ -22,6 +22,7 @@ type Lead = {
   assigned_to_user_id: string | null;
   import_batch_id: string | null;
   updated_at: string;
+  referred_by: string | null;
 };
 
 function KanbanCaptacaoPage() {
