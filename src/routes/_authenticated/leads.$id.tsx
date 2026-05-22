@@ -109,6 +109,7 @@ function LeadDetail() {
             <Info label="Tipo de interesse" value={lead.interest_type} />
             <Info label="Origem" value={lead.source} />
             <Info label="Corretor responsável" value={broker?.name ?? "—"} />
+            <Info label="Indicado por" value={lead.referred_by} />
           </div>
           {lead.general_notes && (
             <div>
