@@ -94,6 +94,7 @@ export function LeadFormDialog({
       assigned_to_user_id: isAdmin ? form.assigned_to_user_id : (lead?.assigned_to_user_id ?? user!.id),
       status_id: form.status_id ?? statuses[0]?.id ?? null,
       general_notes: form.general_notes || null,
+      referred_by: form.referred_by?.trim() || null,
     };
     if (lead?.id) {
       const { error } = await supabase.from("leads").update(payload).eq("id", lead.id);
