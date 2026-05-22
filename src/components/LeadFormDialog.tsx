@@ -139,6 +139,13 @@ export function LeadFormDialog({
               <SelectVal value={form.assigned_to_user_id} onChange={(v) => update("assigned_to_user_id", v)} options={brokers.map((b) => ({ value: b.id, label: b.name }))} allowNone />
             </Field>
           )}
+          <Field label="Indicado por">
+            <Input
+              placeholder="Nome de quem indicou (opcional)"
+              value={form.referred_by ?? ""}
+              onChange={(e) => update("referred_by", e.target.value)}
+            />
+          </Field>
           <div className="md:col-span-2">
             <Label>Observações</Label>
             <Textarea rows={3} value={form.general_notes ?? ""} onChange={(e) => update("general_notes", e.target.value)} />
