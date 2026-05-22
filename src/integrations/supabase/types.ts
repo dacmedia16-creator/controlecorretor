@@ -140,6 +140,27 @@ export type Database = {
           },
         ]
       }
+      follow_up_dismissals: {
+        Row: {
+          dismissed_at: string
+          interaction_id: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string
+          interaction_id: string
+          source: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string
+          interaction_id?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       follow_up_notification_log: {
         Row: {
           interaction_id: string

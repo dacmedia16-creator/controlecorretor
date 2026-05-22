@@ -104,23 +104,23 @@ export function useRecruiterNotifications() {
 
   const unreadCount = items.filter((i) => !i.read).length;
 
-  const markAsRead = useCallback(
+  const dismiss = useCallback(
     async (id: string) => {
-      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, read: true } : i)));
-      await supabase.from("recruiter_notifications").update({ read: true }).eq("id", id);
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      await supabase.from("recruiter_notifications").delete().eq("id", id);
     },
     [],
   );
 
-  const markAllAsRead = useCallback(async () => {
+  const dismissAll = useCallback(async () => {
     if (!user) return;
-    setItems((prev) => prev.map((i) => ({ ...i, read: true })));
-    await supabase
-      .from("recruiter_notifications")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("read", false);
+    setItems([]);
+    await supabase.from("recruiter_notifications").delete().eq("user_id", user.id);
   }, [user]);
+
+  // Back-compat aliases
+  const markAsRead = dismiss;
+  const markAllAsRead = dismissAll;
 
   const toggleSound = useCallback(() => {
     setSoundEnabled((v) => {

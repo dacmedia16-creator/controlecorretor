@@ -23,7 +23,7 @@ function formatTime(iso: string) {
 }
 
 export function FollowUpSidebar({ className }: { className?: string }) {
-  const { enabled, items, count, loading, reload } = useFollowUpToday();
+  const { enabled, items, count, loading, reload, dismiss } = useFollowUpToday();
   const [open, setOpen] = useState(false);
 
   // Auto-open once per session if there are items
@@ -78,7 +78,7 @@ export function FollowUpSidebar({ className }: { className?: string }) {
           ) : (
             <ul className="divide-y">
               {items.map((it) => (
-                <Row key={`${it.source}-${it.interaction_id}`} item={it} onAction={() => setOpen(false)} />
+                <Row key={`${it.source}-${it.interaction_id}`} item={it} onAction={() => { void dismiss(it); setOpen(false); }} onWhats={() => void dismiss(it)} />
               ))}
             </ul>
           )}
@@ -88,7 +88,7 @@ export function FollowUpSidebar({ className }: { className?: string }) {
   );
 }
 
-function Row({ item, onAction }: { item: FollowUpItem; onAction: () => void }) {
+function Row({ item, onAction, onWhats }: { item: FollowUpItem; onAction: () => void; onWhats: () => void }) {
   const wa = whatsappUrl(item.phone);
   const detailHref =
     item.source === "lead"
@@ -115,7 +115,7 @@ function Row({ item, onAction }: { item: FollowUpItem; onAction: () => void }) {
           </Link>
         </Button>
         {wa && (
-          <Button size="sm" variant="outline" asChild>
+          <Button size="sm" variant="outline" asChild onClick={onWhats}>
             <a href={wa} target="_blank" rel="noreferrer">
               <MessageCircle className="size-3.5 mr-1" /> WhatsApp
             </a>
