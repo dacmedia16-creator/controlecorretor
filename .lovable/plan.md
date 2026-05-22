@@ -1,44 +1,40 @@
 ## Problema
 
-Quando uma coluna tem centenas de cards (ex: 534 leads em "Novo contato em massa"), a página inteira cresce indefinidamente, dificultando arrastar entre colunas e rolar até o rodapé. As demais colunas ficam "presas" no topo enquanto a longa força scroll vertical na página.
+A correção anterior colocou `max-h-[calc(100vh-220px)]` em cada `Column`, mas o screenshot mostra que a página ainda cresce sem fim. O motivo: `max-h` em `vh` na coluna não força a área externa (filtros + wrapper flex) a ter altura definida — o wrapper continua crescendo com o conteúdo e a página inteira rola.
 
-## Solução
+A correção certa é **ancorar a altura desde o container externo do board** e propagar `h-full` até a área de scroll interna. Assim a página nunca cresce além da viewport e cada coluna rola sozinha.
 
-Cada coluna do Kanban passa a ter **altura máxima fixa com scroll interno próprio**. Assim:
-- A página não cresce mais do que a viewport.
-- Cada coluna rola independentemente.
-- O cabeçalho/filtros ficam sempre visíveis.
-- Drag-and-drop continua funcionando normalmente entre colunas.
+## O que muda
 
-## Arquivos a ajustar
+Para cada um dos 4 Kanbans:
 
-Aplicar o mesmo padrão de altura+scroll nas colunas destes Kanbans:
+1. `src/components/BulkKanbanBoard.tsx` (Kanban Leads em Massa)
+2. `src/routes/_authenticated/kanban.tsx`
+3. `src/routes/_authenticated/kanban-captacao.tsx`
+4. `src/routes/_authenticated/recrutamento.kanban.tsx`
 
-1. `src/components/BulkKanbanBoard.tsx` — Kanban Leads em Massa (compra e captação)
-2. `src/routes/_authenticated/kanban.tsx` — Kanban geral
-3. `src/routes/_authenticated/kanban-captacao.tsx` — Kanban Captação
-4. `src/routes/_authenticated/recrutamento.kanban.tsx` — Kanban Recrutamento
+### Mudanças técnicas
 
-## Mudanças técnicas
+**No container externo do board (onde hoje está `flex gap-4 overflow-x-auto pb-4`):**
+- Envolver em um wrapper com altura fixa: `h-[calc(100vh-180px)] overflow-hidden` (ajusto o offset por tela conforme a altura real do header+filtros).
+- O flex interno vira `flex h-full gap-4 overflow-x-auto items-stretch pb-2`.
 
-Na função `Column` de cada arquivo:
+**Na função `Column`:**
+- Trocar `max-h-[calc(100vh-220px)]` por `h-full` (já que o pai agora tem altura real).
+- Manter `flex flex-col` no container e `flex-1 overflow-y-auto pr-1` na área dos cards.
+- Manter `shrink-0` no header (nome + contador fica fixo no topo da coluna).
+- Remover `min-h-[200px]` da área interna (atrapalhava o cálculo de altura quando há poucos cards).
 
-- Container da coluna recebe `max-h-[calc(100vh-220px)]` (ou valor equivalente) e vira `flex flex-col`.
-- A área interna que lista os cards ganha `overflow-y-auto` + `pr-1` (para não cortar sombra dos cards).
-- O cabeçalho da coluna (nome + contador) permanece fixo no topo da coluna via `shrink-0`.
-- Adicionar um contador discreto tipo "mostrando X de Y" quando a coluna tiver mais de 50 cards, para reforçar que há mais conteúdo abaixo.
-
-No container externo das colunas:
-- Trocar o `overflow-x-auto pb-4` solto por um wrapper que respeite a altura da viewport, evitando que o body inteiro role.
-
-## Não muda
-
-- Lógica de drag-and-drop (dnd-kit já lida com auto-scroll dentro de containers roláveis).
-- Queries / filtros / ações dos cards.
-- Estilo visual dos cards individuais.
+**No componente raiz da página** (apenas onde necessário): garantir que o pai imediato do board não force `overflow-visible` nem altura automática. Se preciso, envolver com `flex flex-col` para que o wrapper de altura fixa do board funcione corretamente.
 
 ## Resultado esperado
 
-- Página fica contida na viewport.
-- Colunas com muitos leads rolam internamente.
-- Comparação visual entre colunas fica muito mais fácil.
+- A página fica contida na viewport — sem scroll vertical na página.
+- Cada coluna rola internamente, com header sempre visível.
+- Drag-and-drop continua funcionando (dnd-kit faz auto-scroll dentro de containers roláveis).
+- Comparação visual entre colunas fica imediata.
+
+## Não muda
+
+- Lógica de drag-and-drop, queries, filtros, ações dos cards, estilo dos cards.
+- Tipo dos dados nem chamadas Supabase.
