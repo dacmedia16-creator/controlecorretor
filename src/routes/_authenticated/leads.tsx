@@ -120,6 +120,7 @@ function LeadsPage() {
                 <th className="px-3 py-2">Interesse</th>
                 <th className="px-3 py-2">Origem</th>
                 <th className="px-3 py-2">Corretor</th>
+                <th className="px-3 py-2">Indicado por</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Cadastro</th>
                 <th className="px-3 py-2">Atualizado</th>
