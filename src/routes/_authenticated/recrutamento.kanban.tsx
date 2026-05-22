@@ -123,21 +123,23 @@ function BrokerKanbanPage() {
         onDragEnd={onDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="flex h-[calc(100vh-220px)] items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
-          {data.statuses.map((s) => {
-            const col = filteredCandidates.filter((c) => c.status_id === s.id);
-            return (
-              <Column key={s.id} id={s.id} name={s.name} color={s.color} count={col.length}>
-                {col.map((c) => (
-                  <CandidateCard
-                    key={c.id}
-                    cand={c}
-                    respName={c.assigned_to_user_id ? (profileById.get(c.assigned_to_user_id)?.name ?? null) : null}
-                  />
-                ))}
-              </Column>
-            );
-          })}
+        <div className="h-[calc(100vh-220px)] w-full overflow-hidden rounded-lg border bg-card/30 p-3">
+          <div className="flex h-full items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
+            {data.statuses.map((s) => {
+              const col = filteredCandidates.filter((c) => c.status_id === s.id);
+              return (
+                <Column key={s.id} id={s.id} name={s.name} color={s.color} count={col.length}>
+                  {col.map((c) => (
+                    <CandidateCard
+                      key={c.id}
+                      cand={c}
+                      respName={c.assigned_to_user_id ? (profileById.get(c.assigned_to_user_id)?.name ?? null) : null}
+                    />
+                  ))}
+                </Column>
+              );
+            })}
+          </div>
         </div>
         <DragOverlay>
           {activeCand && (
