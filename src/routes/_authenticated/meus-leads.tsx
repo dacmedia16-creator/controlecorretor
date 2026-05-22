@@ -63,6 +63,7 @@ function MyLeadsPage() {
                   <Link to="/leads/$id" params={{ id: l.id }} className="font-semibold hover:text-primary">{l.name}</Link>
                   {l.phone && <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground"><Phone className="size-3" />{l.phone}</div>}
                   {l.city && <div className="text-xs text-muted-foreground">{l.city} {l.neighborhood && `/ ${l.neighborhood}`}</div>}
+                  {l.referred_by && <div className="text-xs text-muted-foreground">🤝 Indicado por: {l.referred_by}</div>}
                 </div>
                 {st && <Badge style={{ backgroundColor: st.color, color: "white" }}>{st.name}</Badge>}
               </div>
