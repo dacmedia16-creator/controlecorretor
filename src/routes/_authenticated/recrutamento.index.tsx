@@ -44,11 +44,11 @@ function RecrutamentoPage() {
   });
 
   const { data: recruiters } = useQuery({
-    queryKey: ["recruiters-and-admins"],
+    queryKey: ["recruiters-managers-and-admins"],
     enabled: isAdmin,
     queryFn: async () => {
       const { data: roles } = await supabase
-        .from("user_roles").select("user_id,role").in("role", ["recrutador", "admin"]);
+        .from("user_roles").select("user_id,role").in("role", ["recrutador", "admin", "gerente_recrutamento"]);
       const ids = Array.from(new Set((roles ?? []).map((r) => r.user_id)));
       if (ids.length === 0) return [] as { id: string; name: string; email: string }[];
       const { data: profs } = await supabase

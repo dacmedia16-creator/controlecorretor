@@ -1,28 +1,20 @@
-# Plano: campo "Indicado por" + exibição nos cards de lead
+# Por que Mary (gerente) não aparece
 
-## O que muda
+Na tela `/recrutamento`, o dropdown "Responsável" é populado pela query `recruiters-and-admins` que filtra apenas papéis `recrutador` e `admin`. Como Mary tem papel `gerente_recrutamento`, ela é excluída — por isso não aparece nem como opção para atribuir, nem no filtro de responsáveis.
 
-### 1. Banco (1 migração)
-- Adicionar coluna `referred_by text` em `public.leads` (texto livre, opcional).
+## Correção (1 arquivo)
 
-### 2. Formulário de Lead (`src/components/LeadFormDialog.tsx`)
-- Nova seção/campo **"Indicado por"** (input de texto livre) — para qualquer pessoa cadastrar quem indicou o lead (cliente, parceiro, corretor, etc.).
-- Salvar no insert e update.
+**`src/routes/_authenticated/recrutamento.index.tsx`**
+- Na query `recruiters-and-admins`, alterar o filtro de papéis para incluir o gerente:
+  ```ts
+  .in("role", ["recrutador", "admin", "gerente_recrutamento"])
+  ```
+- Renomear a queryKey para refletir (ex.: `recruiters-managers-and-admins`) para evitar cache antigo.
 
-### 3. Cards/visualizações de lead — mostrar **Corretor responsável** + **Indicado por**
-- **Kanban geral** (`src/routes/_authenticated/kanban.tsx`) — o card já mostra `brokerName`; adicionar linha "Indicado por: X" quando preenchido. Visível para admin (corretor já vê só os próprios).
-- **Kanban captação** (`src/routes/_authenticated/kanban-captacao.tsx`) — idem.
-- **Kanban em massa** (`src/components/BulkKanbanBoard.tsx`) — adicionar responsável + indicado por.
-- **Lista admin** (`src/routes/_authenticated/leads.tsx`) — adicionar coluna "Indicado por".
-- **Meus leads** (`src/routes/_authenticated/meus-leads.tsx`) — mostrar "Indicado por" no card.
-- **Detalhe do lead** (`src/routes/_authenticated/leads.$id.tsx`) — adicionar campo "Indicado por" no bloco de dados.
+Isso fará a Mary aparecer:
+- no dropdown "Responsável" da tabela de candidatos (para o admin atribuí-la);
+- automaticamente no filtro "Responsável" do topo, assim que ela tiver pelo menos 1 candidato atribuído (esse filtro já usa todos os `assigned_to_user_id` presentes).
 
-## Pergunta antes de implementar
+## Confirmar antes de implementar
 
-**Sobre "gerente":** hoje o papel `gerente_recrutamento` só acessa o módulo de Recrutamento (não vê Leads). Você quer:
-
-- **(a)** Apenas o **admin** vê o responsável/indicação nos cards (gerente continua sem acesso a leads). *Mais simples — recomendado.*
-- **(b)** Dar ao **gerente_recrutamento** acesso de leitura ao módulo de Leads também (ver todos os leads, com responsável e indicação).
-- **(c)** Criar um novo papel **"gerente de leads"** separado, análogo ao gerente_recrutamento.
-
-Confirme (a), (b) ou (c) — e o campo "Indicado por" pode ser texto livre, certo? Ou prefere selecionar de uma lista (ex.: outro corretor cadastrado)?
+Você quer mesmo permitir que o **gerente de recrutamento seja designado como responsável** de um candidato (além de ver todos)? Ou ela deve apenas **visualizar/gerenciar** sem ser atribuída como dona? Se for só visualizar, mantemos a lista como está.
