@@ -51,6 +51,7 @@ type Lead = {
   neighborhood: string | null;
   source: string | null;
   updated_at: string;
+  referred_by: string | null;
 };
 
 type QuickAction = {
@@ -122,7 +123,7 @@ export function BulkKanbanBoard({ mode }: { mode: BulkBoardMode }) {
       let q = supabase
         .from("leads")
         .select(
-          "id,name,phone,status_id,assigned_to_user_id,import_batch_id,city,neighborhood,source,updated_at,interest_type",
+          "id,name,phone,status_id,assigned_to_user_id,import_batch_id,city,neighborhood,source,updated_at,interest_type,referred_by",
         )
         .not("import_batch_id", "is", null);
       if (isCaptacao) q = q.eq("interest_type", "captar");
@@ -489,6 +490,7 @@ function BulkCard({
       <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
         <span>👤 {brokerName}</span>
         <span>📦 {batchName}</span>
+        {lead.referred_by && <span>🤝 {lead.referred_by}</span>}
       </div>
       {last?.last && (
         <div className="text-[10px] text-muted-foreground">
@@ -594,6 +596,7 @@ function FocusView({
           <span>👤 {brokerName(lead.assigned_to_user_id)}</span>
           <span>📦 {batchName(lead.import_batch_id)}</span>
           {lead.city && <span>📍 {lead.city}{lead.neighborhood ? ` / ${lead.neighborhood}` : ""}</span>}
+          {lead.referred_by && <span>🤝 Indicado por: {lead.referred_by}</span>}
         </div>
         {li?.last && <div className="mt-1 text-xs text-muted-foreground">Última interação: {new Date(li.last).toLocaleString("pt-BR")}</div>}
         {li?.next && <div className="text-xs text-primary">Próximo retorno: {new Date(li.next).toLocaleString("pt-BR")}</div>}

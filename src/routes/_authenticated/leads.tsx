@@ -120,6 +120,7 @@ function LeadsPage() {
                 <th className="px-3 py-2">Interesse</th>
                 <th className="px-3 py-2">Origem</th>
                 <th className="px-3 py-2">Corretor</th>
+                <th className="px-3 py-2">Indicado por</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Cadastro</th>
                 <th className="px-3 py-2">Atualizado</th>
@@ -127,7 +128,7 @@ function LeadsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading && <tr><td colSpan={10} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>}
+              {isLoading && <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>}
               {!isLoading && filtered.map((l) => {
                 const st = status(l.status_id);
                 return (
@@ -143,6 +144,7 @@ function LeadsPage() {
                     <td className="px-3 py-2 text-xs capitalize">{l.interest_type ?? "—"}</td>
                     <td className="px-3 py-2 text-xs capitalize">{l.source ?? "—"}</td>
                     <td className="px-3 py-2 text-xs">{brokerName(l.assigned_to_user_id)}</td>
+                    <td className="px-3 py-2 text-xs">{l.referred_by ?? "—"}</td>
                     <td className="px-3 py-2">
                       {st ? <Badge style={{ backgroundColor: st.color, color: "white" }}>{st.name}</Badge> : "—"}
                     </td>
@@ -170,7 +172,7 @@ function LeadsPage() {
                 );
               })}
               {!isLoading && filtered.length === 0 && (
-                <tr><td colSpan={10} className="py-8 text-center text-muted-foreground">Nenhum lead encontrado</td></tr>
+                <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Nenhum lead encontrado</td></tr>
               )}
             </tbody>
           </table>

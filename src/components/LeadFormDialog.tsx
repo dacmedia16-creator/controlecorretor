@@ -23,12 +23,14 @@ type Lead = {
   assigned_to_user_id: string | null;
   status_id: string | null;
   general_notes: string | null;
+  referred_by: string | null;
 };
 
 const empty: Lead = {
   name: "", phone: "", email: "", city: "", neighborhood: "",
   property_type: null, interest_type: null, source: null,
   assigned_to_user_id: null, status_id: null, general_notes: "",
+  referred_by: "",
 };
 
 export function LeadFormDialog({
@@ -92,6 +94,7 @@ export function LeadFormDialog({
       assigned_to_user_id: isAdmin ? form.assigned_to_user_id : (lead?.assigned_to_user_id ?? user!.id),
       status_id: form.status_id ?? statuses[0]?.id ?? null,
       general_notes: form.general_notes || null,
+      referred_by: form.referred_by?.trim() || null,
     };
     if (lead?.id) {
       const { error } = await supabase.from("leads").update(payload).eq("id", lead.id);
@@ -136,6 +139,13 @@ export function LeadFormDialog({
               <SelectVal value={form.assigned_to_user_id} onChange={(v) => update("assigned_to_user_id", v)} options={brokers.map((b) => ({ value: b.id, label: b.name }))} allowNone />
             </Field>
           )}
+          <Field label="Indicado por">
+            <Input
+              placeholder="Nome de quem indicou (opcional)"
+              value={form.referred_by ?? ""}
+              onChange={(e) => update("referred_by", e.target.value)}
+            />
+          </Field>
           <div className="md:col-span-2">
             <Label>Observações</Label>
             <Textarea rows={3} value={form.general_notes ?? ""} onChange={(e) => update("general_notes", e.target.value)} />

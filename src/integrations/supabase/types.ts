@@ -339,6 +339,7 @@ export type Database = {
           phone: string | null
           phone_normalized: string | null
           property_type: string | null
+          referred_by: string | null
           source: string | null
           status_id: string | null
           updated_at: string
@@ -358,6 +359,7 @@ export type Database = {
           phone?: string | null
           phone_normalized?: string | null
           property_type?: string | null
+          referred_by?: string | null
           source?: string | null
           status_id?: string | null
           updated_at?: string
@@ -377,6 +379,7 @@ export type Database = {
           phone?: string | null
           phone_normalized?: string | null
           property_type?: string | null
+          referred_by?: string | null
           source?: string | null
           status_id?: string | null
           updated_at?: string
