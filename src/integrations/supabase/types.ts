@@ -541,7 +541,7 @@ export type Database = {
       normalize_phone: { Args: { _phone: string }; Returns: string }
     }
     Enums: {
-      app_role: "admin" | "corretor" | "recrutador"
+      app_role: "admin" | "corretor" | "recrutador" | "gerente_recrutamento"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -669,7 +669,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "corretor", "recrutador"],
+      app_role: ["admin", "corretor", "recrutador", "gerente_recrutamento"],
     },
   },
 } as const

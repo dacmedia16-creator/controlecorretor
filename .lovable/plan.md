@@ -1,43 +1,41 @@
-# Kanban dentro de uma "janela" com scroll interno (X e Y)
+# Novo papel: Gerente de Recrutamento
 
-## Objetivo
-Transformar a área do kanban em um quadro fixo na viewport. A página em si não rola — apenas dentro do quadro acontece:
-- scroll **horizontal** (deslizar entre colunas)
-- scroll **vertical em cada coluna** (deslizar os cards)
+## O que esse usuário pode fazer
+- **Cadastrar novos recrutadores** (mesma tela usada hoje pelo admin em `/corretores`, aba Recrutadores).
+- **Ver todos os candidatos/contatos de todos os recrutadores** (módulo Recrutamento — lista, kanban, dashboard, detalhe do candidato e histórico de interações).
+- **NÃO** acessa Leads, Captação, Importações nem cadastros administrativos. Não cria admins nem corretores.
 
-Cabeçalho da página, filtros e header das colunas ficam sempre visíveis.
+## Banco de dados (1 migração)
 
-## Onde aplicar
-Mesmas 4 telas já tocadas:
-- `src/components/BulkKanbanBoard.tsx` (Kanban Leads em Massa — `/kanban-massa`)
-- `src/routes/_authenticated/kanban.tsx`
-- `src/routes/_authenticated/kanban-captacao.tsx`
-- `src/routes/_authenticated/recrutamento.kanban.tsx`
+1. Adicionar valor `gerente_recrutamento` ao enum `public.app_role`.
+2. Atualizar `public.handle_new_user()` para aceitar `gerente_recrutamento` em `raw_user_meta_data.role` (hoje só aceita admin/corretor/recrutador).
+3. Criar função helper `is_recruitment_manager(uuid)` (security definer) — atalho para `has_role(_user_id, 'gerente_recrutamento')`.
+4. Estender RLS para o gerente conseguir **ver tudo** do recrutamento, mas só editar o que faria sentido:
+   - `broker_candidates`: nova policy SELECT/UPDATE para quem é `gerente_recrutamento` (todos os registros).
+   - `broker_candidate_interactions`: nova policy SELECT/INSERT para o gerente (todos).
+   - `kanban_statuses` (tipo `broker_recruitment`): nova policy SELECT (já é público para autenticados — confirmar). Edição continua só admin/recrutador.
+   - `profiles` + `user_roles`: SELECT já é liberado para autenticados; adicionar policy INSERT em `user_roles` **só** para criar role `recrutador` quando quem chama é `gerente_recrutamento` (na prática o trigger `handle_new_user` cria isso, então basta liberar via trigger — não precisa policy extra).
 
-## Mudanças (resumo técnico)
+## Código (frontend)
 
-1. **Wrapper externo do kanban** vira a "janela":
-   - `h-[calc(100vh-220px)] w-full overflow-hidden rounded-lg border bg-card/30 p-3`
-   - (borda + fundo sutil para parecer um quadro real)
+1. **`src/lib/auth.tsx`** — adicionar `"gerente_recrutamento"` ao type `AppRole`.
+2. **`src/components/AppLayout.tsx`** — incluir o novo papel em:
+   - `/recrutamento` (lista)
+   - `/recrutamento/kanban`
+   - `/recrutamento/dashboard`
+   - novo item de menu "Recrutadores" → `/corretores` (filtrado, só aba recrutadores) **ou** abrir uma versão simplificada da tela.
+3. **`src/routes/_authenticated/corretores.tsx`**:
+   - Permitir acesso para `admin` **ou** `gerente_recrutamento`.
+   - Se for gerente: esconder aba "Corretores", deixar apenas "Recrutadores"; no formulário de novo usuário, fixar `role = recrutador` (sem o select).
+4. **`src/routes/login.tsx`** — redirecionar gerente para `/recrutamento` após login (mesmo destino do recrutador).
+5. **`src/routes/_authenticated/recrutamento.index.tsx`**, **`recrutamento.kanban.tsx`**, **`recrutamento.dashboard.tsx`**, **`recrutamento.$id.tsx`** — onde houver filtro do tipo "só meus candidatos" no client, garantir que o gerente vê todos (a RLS já libera; verificar se existe filtro `assigned_to_user_id === user.id` no front e remover para o gerente).
+6. **`src/routes/index.tsx`** — landing por role: gerente cai em `/recrutamento`.
 
-2. **Trilho de colunas** (filho direto da janela):
-   - `flex h-full gap-4 overflow-x-auto overflow-y-hidden items-stretch`
-   - É aqui que o scroll **horizontal** acontece — dentro do quadro, não na página.
+## Observações
+- Senha provisória do recrutador segue o mesmo fluxo atual (signUp com e-mail de confirmação).
+- Não vou tocar nas regras dos módulos de Leads/Captação — o gerente fica sem acesso a eles, como pedido.
+- Quero confirmar 1 ponto antes de implementar (próxima resposta) — me responde rapidinho:
 
-3. **Cada coluna**:
-   - `h-full w-[300px] shrink-0 flex flex-col` (largura fixa para forçar o overflow-x do trilho)
-   - Header da coluna: `shrink-0`
-   - Lista de cards: `flex-1 overflow-y-auto pr-1` (scroll **vertical** por coluna)
-
-4. **Página/rota** ao redor: garantir que o container pai use `flex flex-col` e não force `overflow-visible`, para que o `h-[calc(100vh-220px)]` da janela seja respeitado.
-
-## Resultado esperado
-- A página não cresce mais conforme aumentam os leads.
-- Existe um quadro visível ocupando a área útil da tela.
-- Dentro do quadro: arrasta lateralmente para ver mais colunas; cada coluna rola sozinha verticalmente.
-- Drag-and-drop continua funcionando normalmente.
-
-## Ajustes opcionais (posso aplicar se pedir)
-- Mudar o `220px` se sobrar/faltar espaço.
-- Largura da coluna (300px) — posso deixar maior/menor.
-- Tirar a borda do quadro se preferir sem moldura visual.
+**Cadastro do primeiro gerente:** quem cria? Opções:
+  - (a) Só o **admin** cria gerentes (e gerentes criam recrutadores). Mais seguro.
+  - (b) Gerente também pode criar outros gerentes.
