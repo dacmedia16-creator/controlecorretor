@@ -20,11 +20,11 @@ const NAV: NavItem[] = [
   { to: "/kanban-massa", label: "Kanban Compra em Massa", icon: Layers, roles: ["admin", "corretor"] },
   { to: "/kanban-captacao", label: "Kanban Captação", icon: Home, roles: ["admin", "corretor"] },
   { to: "/kanban-captacao-massa", label: "Kanban Captação em Massa", icon: Key, roles: ["admin", "corretor"] },
-  { to: "/recrutamento/dashboard", label: "Dashboard Recrutamento", icon: LayoutDashboard, roles: ["recrutador"] },
-  { to: "/recrutamento", label: "Recrutamento", icon: UserPlus, roles: ["admin", "recrutador"] },
-  { to: "/recrutamento/kanban", label: "Kanban Recrutamento", icon: Trello, roles: ["recrutador"] },
-  { to: "/corretores", label: "Corretores", icon: Users, roles: ["admin"] },
-  { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin", "recrutador"] },
+  { to: "/recrutamento/dashboard", label: "Dashboard Recrutamento", icon: LayoutDashboard, roles: ["recrutador", "gerente_recrutamento"] },
+  { to: "/recrutamento", label: "Recrutamento", icon: UserPlus, roles: ["admin", "recrutador", "gerente_recrutamento"] },
+  { to: "/recrutamento/kanban", label: "Kanban Recrutamento", icon: Trello, roles: ["recrutador", "gerente_recrutamento"] },
+  { to: "/corretores", label: "Usuários", icon: Users, roles: ["admin", "gerente_recrutamento"] },
+  { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin", "recrutador", "gerente_recrutamento"] },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {

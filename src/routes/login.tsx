@@ -28,7 +28,7 @@ function LoginPage() {
       const dest =
         role === "admin"
           ? "/dashboard"
-          : role === "recrutador"
+          : role === "recrutador" || role === "gerente_recrutamento"
             ? "/recrutamento/dashboard"
             : "/meus-leads";
       nav({ to: dest });

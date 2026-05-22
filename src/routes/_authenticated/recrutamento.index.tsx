@@ -19,13 +19,13 @@ export const Route = createFileRoute("/_authenticated/recrutamento/")({
 
 function RecrutamentoPage() {
   const { role } = useAuth();
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "gerente_recrutamento";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [openNew, setOpenNew] = useState(false);
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
 
-  if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
+  if (role !== "admin" && role !== "recrutador" && role !== "gerente_recrutamento") return <p>Acesso restrito.</p>;
 
   const { data, isLoading } = useQuery({
     queryKey: ["broker-candidates"],

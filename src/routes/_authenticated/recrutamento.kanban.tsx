@@ -36,8 +36,8 @@ function BrokerKanbanPage() {
   const [openNew, setOpenNew] = useState(false);
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
 
-  if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
-  const isAdmin = role === "admin";
+  if (role !== "admin" && role !== "recrutador" && role !== "gerente_recrutamento") return <p>Acesso restrito.</p>;
+  const isAdmin = role === "admin" || role === "gerente_recrutamento";
 
   const queryKey = ["broker-kanban"];
   const { data, isLoading } = useQuery({

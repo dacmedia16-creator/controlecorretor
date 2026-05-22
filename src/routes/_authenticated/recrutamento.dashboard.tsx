@@ -17,7 +17,7 @@ function RecrutamentoDashboard() {
   const { role, profile } = useAuth();
   const [openNew, setOpenNew] = useState(false);
 
-  if (role !== "admin" && role !== "recrutador") return <p>Acesso restrito.</p>;
+  if (role !== "admin" && role !== "recrutador" && role !== "gerente_recrutamento") return <p>Acesso restrito.</p>;
 
   const { data, isLoading } = useQuery({
     queryKey: ["recrutamento-dashboard"],
