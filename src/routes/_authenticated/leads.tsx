@@ -144,6 +144,7 @@ function LeadsPage() {
                     <td className="px-3 py-2 text-xs capitalize">{l.interest_type ?? "—"}</td>
                     <td className="px-3 py-2 text-xs capitalize">{l.source ?? "—"}</td>
                     <td className="px-3 py-2 text-xs">{brokerName(l.assigned_to_user_id)}</td>
+                    <td className="px-3 py-2 text-xs">{l.referred_by ?? "—"}</td>
                     <td className="px-3 py-2">
                       {st ? <Badge style={{ backgroundColor: st.color, color: "white" }}>{st.name}</Badge> : "—"}
                     </td>
