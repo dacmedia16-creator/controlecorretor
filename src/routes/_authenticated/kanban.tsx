@@ -175,6 +175,7 @@ function KanbanCard({ lead, brokerName, last }: { lead: Lead; brokerName: string
       <div className="font-medium">{lead.name}</div>
       <div className="text-xs text-muted-foreground">{lead.phone ?? "Sem telefone"}</div>
       <div className="mt-1 text-[11px] text-muted-foreground">👤 {brokerName}</div>
+      {lead.referred_by && <div className="text-[11px] text-muted-foreground">🤝 Indicado por: {lead.referred_by}</div>}
       {last?.last && <div className="text-[11px] text-muted-foreground">⏱ {new Date(last.last).toLocaleDateString("pt-BR")}</div>}
       {last?.next && <div className="text-[11px] text-primary">📅 {new Date(last.next).toLocaleDateString("pt-BR")}</div>}
       {lead.phone && (
