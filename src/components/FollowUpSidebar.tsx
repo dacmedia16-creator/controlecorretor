@@ -115,7 +115,7 @@ function Row({ item, onAction, onWhats }: { item: FollowUpItem; onAction: () => 
           </Link>
         </Button>
         {wa && (
-          <Button size="sm" variant="outline" asChild>
+          <Button size="sm" variant="outline" asChild onClick={onWhats}>
             <a href={wa} target="_blank" rel="noreferrer">
               <MessageCircle className="size-3.5 mr-1" /> WhatsApp
             </a>
