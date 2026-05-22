@@ -123,7 +123,7 @@ export function BulkKanbanBoard({ mode }: { mode: BulkBoardMode }) {
       let q = supabase
         .from("leads")
         .select(
-          "id,name,phone,status_id,assigned_to_user_id,import_batch_id,city,neighborhood,source,updated_at,interest_type",
+          "id,name,phone,status_id,assigned_to_user_id,import_batch_id,city,neighborhood,source,updated_at,interest_type,referred_by",
         )
         .not("import_batch_id", "is", null);
       if (isCaptacao) q = q.eq("interest_type", "captar");
