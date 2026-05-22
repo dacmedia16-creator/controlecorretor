@@ -1,40 +1,43 @@
-## Problema
+# Kanban dentro de uma "janela" com scroll interno (X e Y)
 
-A correção anterior colocou `max-h-[calc(100vh-220px)]` em cada `Column`, mas o screenshot mostra que a página ainda cresce sem fim. O motivo: `max-h` em `vh` na coluna não força a área externa (filtros + wrapper flex) a ter altura definida — o wrapper continua crescendo com o conteúdo e a página inteira rola.
+## Objetivo
+Transformar a área do kanban em um quadro fixo na viewport. A página em si não rola — apenas dentro do quadro acontece:
+- scroll **horizontal** (deslizar entre colunas)
+- scroll **vertical em cada coluna** (deslizar os cards)
 
-A correção certa é **ancorar a altura desde o container externo do board** e propagar `h-full` até a área de scroll interna. Assim a página nunca cresce além da viewport e cada coluna rola sozinha.
+Cabeçalho da página, filtros e header das colunas ficam sempre visíveis.
 
-## O que muda
+## Onde aplicar
+Mesmas 4 telas já tocadas:
+- `src/components/BulkKanbanBoard.tsx` (Kanban Leads em Massa — `/kanban-massa`)
+- `src/routes/_authenticated/kanban.tsx`
+- `src/routes/_authenticated/kanban-captacao.tsx`
+- `src/routes/_authenticated/recrutamento.kanban.tsx`
 
-Para cada um dos 4 Kanbans:
+## Mudanças (resumo técnico)
 
-1. `src/components/BulkKanbanBoard.tsx` (Kanban Leads em Massa)
-2. `src/routes/_authenticated/kanban.tsx`
-3. `src/routes/_authenticated/kanban-captacao.tsx`
-4. `src/routes/_authenticated/recrutamento.kanban.tsx`
+1. **Wrapper externo do kanban** vira a "janela":
+   - `h-[calc(100vh-220px)] w-full overflow-hidden rounded-lg border bg-card/30 p-3`
+   - (borda + fundo sutil para parecer um quadro real)
 
-### Mudanças técnicas
+2. **Trilho de colunas** (filho direto da janela):
+   - `flex h-full gap-4 overflow-x-auto overflow-y-hidden items-stretch`
+   - É aqui que o scroll **horizontal** acontece — dentro do quadro, não na página.
 
-**No container externo do board (onde hoje está `flex gap-4 overflow-x-auto pb-4`):**
-- Envolver em um wrapper com altura fixa: `h-[calc(100vh-180px)] overflow-hidden` (ajusto o offset por tela conforme a altura real do header+filtros).
-- O flex interno vira `flex h-full gap-4 overflow-x-auto items-stretch pb-2`.
+3. **Cada coluna**:
+   - `h-full w-[300px] shrink-0 flex flex-col` (largura fixa para forçar o overflow-x do trilho)
+   - Header da coluna: `shrink-0`
+   - Lista de cards: `flex-1 overflow-y-auto pr-1` (scroll **vertical** por coluna)
 
-**Na função `Column`:**
-- Trocar `max-h-[calc(100vh-220px)]` por `h-full` (já que o pai agora tem altura real).
-- Manter `flex flex-col` no container e `flex-1 overflow-y-auto pr-1` na área dos cards.
-- Manter `shrink-0` no header (nome + contador fica fixo no topo da coluna).
-- Remover `min-h-[200px]` da área interna (atrapalhava o cálculo de altura quando há poucos cards).
-
-**No componente raiz da página** (apenas onde necessário): garantir que o pai imediato do board não force `overflow-visible` nem altura automática. Se preciso, envolver com `flex flex-col` para que o wrapper de altura fixa do board funcione corretamente.
+4. **Página/rota** ao redor: garantir que o container pai use `flex flex-col` e não force `overflow-visible`, para que o `h-[calc(100vh-220px)]` da janela seja respeitado.
 
 ## Resultado esperado
+- A página não cresce mais conforme aumentam os leads.
+- Existe um quadro visível ocupando a área útil da tela.
+- Dentro do quadro: arrasta lateralmente para ver mais colunas; cada coluna rola sozinha verticalmente.
+- Drag-and-drop continua funcionando normalmente.
 
-- A página fica contida na viewport — sem scroll vertical na página.
-- Cada coluna rola internamente, com header sempre visível.
-- Drag-and-drop continua funcionando (dnd-kit faz auto-scroll dentro de containers roláveis).
-- Comparação visual entre colunas fica imediata.
-
-## Não muda
-
-- Lógica de drag-and-drop, queries, filtros, ações dos cards, estilo dos cards.
-- Tipo dos dados nem chamadas Supabase.
+## Ajustes opcionais (posso aplicar se pedir)
+- Mudar o `220px` se sobrar/faltar espaço.
+- Largura da coluna (300px) — posso deixar maior/menor.
+- Tirar a borda do quadro se preferir sem moldura visual.
