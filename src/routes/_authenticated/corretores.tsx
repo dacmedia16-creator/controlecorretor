@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-type NewRole = "corretor" | "recrutador";
+type NewRole = "corretor" | "recrutador" | "gerente_recrutamento";
 
 export const Route = createFileRoute("/_authenticated/corretores")({
   component: BrokersPage,
@@ -26,23 +26,31 @@ function BrokersPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
 
+  const isAdmin = role === "admin";
+  const isGerente = role === "gerente_recrutamento";
+  const canAccess = isAdmin || isGerente;
+
   const { data, isLoading } = useQuery({
     queryKey: ["brokers"],
+    enabled: canAccess,
     queryFn: async () => {
       const [profiles, roles, leads] = await Promise.all([
         supabase.from("profiles").select("*").order("name"),
         supabase.from("user_roles").select("user_id, role"),
-        supabase.from("leads").select("id, assigned_to_user_id, status_id"),
+        isAdmin
+          ? supabase.from("leads").select("id, assigned_to_user_id, status_id")
+          : Promise.resolve({ data: [] as any[] }),
       ]);
       return { profiles: profiles.data ?? [], roles: roles.data ?? [], leads: leads.data ?? [] };
     },
   });
 
-  if (role !== "admin") return <p>Acesso restrito.</p>;
+  if (!canAccess) return <p>Acesso restrito.</p>;
   if (isLoading || !data) return <div>Carregando…</div>;
 
   const brokers = data.profiles.filter((p) => data.roles.some((r) => r.user_id === p.id && r.role === "corretor"));
   const recruiters = data.profiles.filter((p) => data.roles.some((r) => r.user_id === p.id && r.role === "recrutador"));
+  const managers = data.profiles.filter((p) => data.roles.some((r) => r.user_id === p.id && r.role === "gerente_recrutamento"));
 
   async function toggleActive(id: string, active: boolean) {
     const { error } = await supabase.from("profiles").update({ active }).eq("id", id);
@@ -50,45 +58,72 @@ function BrokersPage() {
     else { toast.success(active ? "Ativado" : "Desativado"); qc.invalidateQueries({ queryKey: ["brokers"] }); }
   }
 
+  const counters = isAdmin
+    ? `${brokers.length} corretor(es) · ${recruiters.length} recrutador(es) · ${managers.length} gerente(s)`
+    : `${recruiters.length} recrutador(es)`;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Usuários</h1>
-          <p className="text-sm text-muted-foreground">{brokers.length} corretor(es) · {recruiters.length} recrutador(es)</p>
+          <p className="text-sm text-muted-foreground">{counters}</p>
         </div>
-        <Button onClick={() => { setEditing(null); setOpen(true); }}>Novo usuário</Button>
+        <Button onClick={() => { setEditing(null); setOpen(true); }}>
+          {isGerente ? "Novo recrutador" : "Novo usuário"}
+        </Button>
       </div>
 
-      <Tabs defaultValue="corretores">
-        <TabsList>
-          <TabsTrigger value="corretores">Corretores</TabsTrigger>
-          <TabsTrigger value="recrutadores">Recrutadores</TabsTrigger>
-        </TabsList>
-        <TabsContent value="corretores">
-          <UserTable
-            users={brokers}
-            leads={data.leads}
-            showLeads
-            onToggle={toggleActive}
-            onEdit={(b) => { setEditing(b); setOpen(true); }}
-          />
-        </TabsContent>
-        <TabsContent value="recrutadores">
-          <UserTable
-            users={recruiters}
-            leads={[]}
-            showLeads={false}
-            onToggle={toggleActive}
-            onEdit={(b) => { setEditing(b); setOpen(true); }}
-          />
-        </TabsContent>
-      </Tabs>
+      {isAdmin ? (
+        <Tabs defaultValue="corretores">
+          <TabsList>
+            <TabsTrigger value="corretores">Corretores</TabsTrigger>
+            <TabsTrigger value="recrutadores">Recrutadores</TabsTrigger>
+            <TabsTrigger value="gerentes">Gerentes de Recrutamento</TabsTrigger>
+          </TabsList>
+          <TabsContent value="corretores">
+            <UserTable
+              users={brokers}
+              leads={data.leads}
+              showLeads
+              onToggle={toggleActive}
+              onEdit={(b) => { setEditing(b); setOpen(true); }}
+            />
+          </TabsContent>
+          <TabsContent value="recrutadores">
+            <UserTable
+              users={recruiters}
+              leads={[]}
+              showLeads={false}
+              onToggle={toggleActive}
+              onEdit={(b) => { setEditing(b); setOpen(true); }}
+            />
+          </TabsContent>
+          <TabsContent value="gerentes">
+            <UserTable
+              users={managers}
+              leads={[]}
+              showLeads={false}
+              onToggle={toggleActive}
+              onEdit={(b) => { setEditing(b); setOpen(true); }}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <UserTable
+          users={recruiters}
+          leads={[]}
+          showLeads={false}
+          onToggle={toggleActive}
+          onEdit={(b) => { setEditing(b); setOpen(true); }}
+        />
+      )}
 
       <UserDialog
         open={open}
         onOpenChange={setOpen}
         user={editing}
+        isAdmin={isAdmin}
         onSaved={() => qc.invalidateQueries({ queryKey: ["brokers"] })}
       />
     </div>
@@ -143,9 +178,9 @@ function UserTable({
 }
 
 function UserDialog({
-  open, onOpenChange, user, onSaved,
+  open, onOpenChange, user, isAdmin, onSaved,
 }: {
-  open: boolean; onOpenChange: (v: boolean) => void; user: any; onSaved: () => void;
+  open: boolean; onOpenChange: (v: boolean) => void; user: any; isAdmin: boolean; onSaved: () => void;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -160,9 +195,10 @@ function UserDialog({
       setEmail(user?.email ?? "");
       setPhone(user?.phone ?? "");
       setPassword("");
-      setNewRole("corretor");
+      // Gerente só cria recrutador; admin pode escolher e o default é corretor
+      setNewRole(isAdmin ? "corretor" : "recrutador");
     }
-  }, [open, user]);
+  }, [open, user, isAdmin]);
 
   async function save() {
     setBusy(true);
@@ -171,20 +207,21 @@ function UserDialog({
       if (error) { toast.error(error.message); setBusy(false); return; }
       toast.success("Usuário atualizado");
     } else {
+      const roleToCreate: NewRole = isAdmin ? newRole : "recrutador";
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
-          data: { name, phone, role: newRole },
+          data: { name, phone, role: roleToCreate },
         },
       });
       if (error) { toast.error(error.message); setBusy(false); return; }
-      toast.success(
-        newRole === "recrutador"
-          ? "Recrutador cadastrado. Ele receberá um e-mail de confirmação."
-          : "Corretor cadastrado. Ele receberá um e-mail de confirmação.",
-      );
+      const label =
+        roleToCreate === "recrutador" ? "Recrutador"
+        : roleToCreate === "gerente_recrutamento" ? "Gerente de Recrutamento"
+        : "Corretor";
+      toast.success(`${label} cadastrado. Ele receberá um e-mail de confirmação.`);
     }
     setBusy(false);
     onOpenChange(false);
@@ -194,26 +231,37 @@ function UserDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{user?.id ? "Editar usuário" : "Novo usuário"}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>
+            {user?.id ? "Editar usuário" : isAdmin ? "Novo usuário" : "Novo recrutador"}
+          </DialogTitle>
+        </DialogHeader>
         <div className="space-y-3">
           <div><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div><Label>E-mail</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!!user?.id} /></div>
           <div><Label>Telefone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
           {!user?.id && (
             <>
-              <div>
-                <Label>Perfil</Label>
-                <Select value={newRole} onValueChange={(v) => setNewRole(v as NewRole)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="corretor">Corretor</SelectItem>
-                    <SelectItem value="recrutador">Recrutador</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Recrutador só acessa o módulo de Recrutamento de Corretores.
+              {isAdmin ? (
+                <div>
+                  <Label>Perfil</Label>
+                  <Select value={newRole} onValueChange={(v) => setNewRole(v as NewRole)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="corretor">Corretor</SelectItem>
+                      <SelectItem value="recrutador">Recrutador</SelectItem>
+                      <SelectItem value="gerente_recrutamento">Gerente de Recrutamento</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Gerente de Recrutamento vê todos os candidatos e pode cadastrar novos recrutadores.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Você está cadastrando um novo <strong>Recrutador</strong>.
                 </p>
-              </div>
+              )}
               <div>
                 <Label>Senha provisória</Label>
                 <Input type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
