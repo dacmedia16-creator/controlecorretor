@@ -78,7 +78,7 @@ export function FollowUpSidebar({ className }: { className?: string }) {
           ) : (
             <ul className="divide-y">
               {items.map((it) => (
-                <Row key={`${it.source}-${it.interaction_id}`} item={it} onAction={() => setOpen(false)} />
+                <Row key={`${it.source}-${it.interaction_id}`} item={it} onAction={() => { void dismiss(it); setOpen(false); }} onWhats={() => void dismiss(it)} />
               ))}
             </ul>
           )}
