@@ -23,12 +23,14 @@ type Lead = {
   assigned_to_user_id: string | null;
   status_id: string | null;
   general_notes: string | null;
+  referred_by: string | null;
 };
 
 const empty: Lead = {
   name: "", phone: "", email: "", city: "", neighborhood: "",
   property_type: null, interest_type: null, source: null,
   assigned_to_user_id: null, status_id: null, general_notes: "",
+  referred_by: "",
 };
 
 export function LeadFormDialog({
