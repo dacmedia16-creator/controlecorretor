@@ -37,7 +37,7 @@ function KanbanCaptacaoPage() {
     queryFn: async () => {
       let q = supabase
         .from("leads")
-        .select("id,name,phone,status_id,assigned_to_user_id,import_batch_id,updated_at")
+        .select("id,name,phone,status_id,assigned_to_user_id,import_batch_id,updated_at,referred_by")
         .is("import_batch_id", null)
         .eq("interest_type", "captar");
       if (role === "corretor") q = q.or(`assigned_to_user_id.eq.${user!.id},created_by_user_id.eq.${user!.id}`);
