@@ -128,7 +128,7 @@ function LeadsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading && <tr><td colSpan={10} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>}
+              {isLoading && <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>}
               {!isLoading && filtered.map((l) => {
                 const st = status(l.status_id);
                 return (
@@ -172,7 +172,7 @@ function LeadsPage() {
                 );
               })}
               {!isLoading && filtered.length === 0 && (
-                <tr><td colSpan={10} className="py-8 text-center text-muted-foreground">Nenhum lead encontrado</td></tr>
+                <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Nenhum lead encontrado</td></tr>
               )}
             </tbody>
           </table>
