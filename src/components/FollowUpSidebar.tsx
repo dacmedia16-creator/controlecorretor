@@ -23,7 +23,7 @@ function formatTime(iso: string) {
 }
 
 export function FollowUpSidebar({ className }: { className?: string }) {
-  const { enabled, items, count, loading, reload } = useFollowUpToday();
+  const { enabled, items, count, loading, reload, dismiss } = useFollowUpToday();
   const [open, setOpen] = useState(false);
 
   // Auto-open once per session if there are items
