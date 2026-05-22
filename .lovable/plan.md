@@ -1,42 +1,44 @@
-## Objetivo
+## Problema
 
-Ao clicar/abrir uma notificação (sino ou sidebar), ela é **dispensada** e não volta a aparecer nem a tocar alerta novamente — mesmo no dia seguinte, enquanto o follow-up estiver agendado para a mesma data.
+Quando uma coluna tem centenas de cards (ex: 534 leads em "Novo contato em massa"), a página inteira cresce indefinidamente, dificultando arrastar entre colunas e rolar até o rodapé. As demais colunas ficam "presas" no topo enquanto a longa força scroll vertical na página.
 
-## Comportamento novo
+## Solução
 
-**Sino (NotificationBell)**
-- Clicar no item → marca como lida **e remove da lista** imediatamente (delete em `recruiter_notifications`).
-- Sem clique = continua lá tocando/avisando conforme regra atual (1x por dia).
+Cada coluna do Kanban passa a ter **altura máxima fixa com scroll interno próprio**. Assim:
+- A página não cresce mais do que a viewport.
+- Cada coluna rola independentemente.
+- O cabeçalho/filtros ficam sempre visíveis.
+- Drag-and-drop continua funcionando normalmente entre colunas.
 
-**Sidebar de follow-ups (FollowUpSidebar)**
-- Clicar em "Abrir" ou "WhatsApp" de um item → marca aquele follow-up como **dispensado** para o usuário.
-- Item dispensado **não aparece mais** na sidebar e **não dispara mais beep/toast** pelo trigger do banco, enquanto a data agendada não mudar.
-- A sidebar deixa de auto-abrir quando todos os pendentes do dia já foram dispensados.
+## Arquivos a ajustar
+
+Aplicar o mesmo padrão de altura+scroll nas colunas destes Kanbans:
+
+1. `src/components/BulkKanbanBoard.tsx` — Kanban Leads em Massa (compra e captação)
+2. `src/routes/_authenticated/kanban.tsx` — Kanban geral
+3. `src/routes/_authenticated/kanban-captacao.tsx` — Kanban Captação
+4. `src/routes/_authenticated/recrutamento.kanban.tsx` — Kanban Recrutamento
 
 ## Mudanças técnicas
 
-**Banco (migration)**
-- Nova tabela `follow_up_dismissals(user_id, interaction_id, source, dismissed_at)` com PK `(user_id, interaction_id, source)`.
-- RLS: usuário só vê/insere/deleta os próprios registros.
-- Ajustar `notify_lead_followup` e `notify_candidate_followup` para **não inserir** em `recruiter_notifications` se já existir registro em `follow_up_dismissals` para `(target_user, interaction_id, source)`. Continua respeitando o `follow_up_notification_log` existente.
-- Se o usuário criar uma nova interação (novo `interaction_id`) com data de follow-up, ele volta a notificar normalmente — porque a chave de dispensa é por interação.
+Na função `Column` de cada arquivo:
 
-**Frontend**
-- `useRecruiterNotifications`: trocar `markAsRead(id)` por `dismiss(id)` que faz `DELETE` na linha e remove do estado local. `markAllAsRead` vira `dismissAll` (delete em massa do usuário).
-- `useFollowUpToday`: ao carregar, dar `LEFT JOIN` (via segunda query) com `follow_up_dismissals` do usuário e filtrar fora os já dispensados. Expor `dismiss(item)` que insere em `follow_up_dismissals` e remove do estado.
-- `FollowUpSidebar`: chamar `dismiss(item)` ao clicar em "Abrir" / "WhatsApp".
-- `NotificationBell`: chamar `dismiss(n.id)` no clique do item (em vez de `markAsRead`).
+- Container da coluna recebe `max-h-[calc(100vh-220px)]` (ou valor equivalente) e vira `flex flex-col`.
+- A área interna que lista os cards ganha `overflow-y-auto` + `pr-1` (para não cortar sombra dos cards).
+- O cabeçalho da coluna (nome + contador) permanece fixo no topo da coluna via `shrink-0`.
+- Adicionar um contador discreto tipo "mostrando X de Y" quando a coluna tiver mais de 50 cards, para reforçar que há mais conteúdo abaixo.
 
-## Arquivos afetados
+No container externo das colunas:
+- Trocar o `overflow-x-auto pb-4` solto por um wrapper que respeite a altura da viewport, evitando que o body inteiro role.
 
-- nova migration SQL (tabela + RLS + ajuste nas 2 funções de trigger)
-- `src/hooks/useRecruiterNotifications.ts`
-- `src/hooks/useFollowUpToday.ts`
-- `src/components/NotificationBell.tsx`
-- `src/components/FollowUpSidebar.tsx`
+## Não muda
 
-## Confirmações antes de implementar
+- Lógica de drag-and-drop (dnd-kit já lida com auto-scroll dentro de containers roláveis).
+- Queries / filtros / ações dos cards.
+- Estilo visual dos cards individuais.
 
-1. **Dispensar = apagar de vez** ou só esconder daquele usuário? (Plano assume esconder/apagar para o usuário; o item some e não volta mesmo recarregando.)
-2. Na sidebar, qualquer clique (Abrir **ou** WhatsApp) já dispensa, certo? Ou só "Abrir"?
-3. Se o follow-up continuar atrasado por vários dias, deve voltar a alertar nos próximos dias mesmo já tendo sido clicado uma vez? (Plano atual: **não volta** até criar nova interação.)
+## Resultado esperado
+
+- Página fica contida na viewport.
+- Colunas com muitos leads rolam internamente.
+- Comparação visual entre colunas fica muito mais fácil.
