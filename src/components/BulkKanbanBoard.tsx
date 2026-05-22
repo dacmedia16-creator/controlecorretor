@@ -51,6 +51,7 @@ type Lead = {
   neighborhood: string | null;
   source: string | null;
   updated_at: string;
+  referred_by: string | null;
 };
 
 type QuickAction = {
