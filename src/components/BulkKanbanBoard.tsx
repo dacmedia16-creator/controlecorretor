@@ -596,6 +596,7 @@ function FocusView({
           <span>👤 {brokerName(lead.assigned_to_user_id)}</span>
           <span>📦 {batchName(lead.import_batch_id)}</span>
           {lead.city && <span>📍 {lead.city}{lead.neighborhood ? ` / ${lead.neighborhood}` : ""}</span>}
+          {lead.referred_by && <span>🤝 Indicado por: {lead.referred_by}</span>}
         </div>
         {li?.last && <div className="mt-1 text-xs text-muted-foreground">Última interação: {new Date(li.last).toLocaleString("pt-BR")}</div>}
         {li?.next && <div className="text-xs text-primary">Próximo retorno: {new Date(li.next).toLocaleString("pt-BR")}</div>}
