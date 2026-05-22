@@ -490,6 +490,7 @@ function BulkCard({
       <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
         <span>👤 {brokerName}</span>
         <span>📦 {batchName}</span>
+        {lead.referred_by && <span>🤝 {lead.referred_by}</span>}
       </div>
       {last?.last && (
         <div className="text-[10px] text-muted-foreground">
