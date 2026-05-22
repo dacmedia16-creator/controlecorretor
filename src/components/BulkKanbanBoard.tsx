@@ -344,7 +344,8 @@ export function BulkKanbanBoard({ mode }: { mode: BulkBoardMode }) {
           onDragEnd={onDragEnd}
           onDragCancel={() => setActiveId(null)}
         >
-          <div className="flex h-[calc(100vh-220px)] items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
+          <div className="h-[calc(100vh-220px)] w-full overflow-hidden rounded-lg border bg-card/30 p-3">
+          <div className="flex h-full items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
             {data.statuses.map((s: any) => {
               const colLeads = visibleLeads.filter((l) => l.status_id === s.id);
               return (
@@ -370,6 +371,7 @@ export function BulkKanbanBoard({ mode }: { mode: BulkBoardMode }) {
                 </Column>
               );
             })}
+          </div>
           </div>
           <DragOverlay>
             {activeLead && (
