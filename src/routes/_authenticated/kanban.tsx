@@ -109,7 +109,7 @@ function KanbanPage() {
         onDragEnd={onDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex h-[calc(100vh-220px)] items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
           {data.statuses.map((s) => {
             const colLeads = data.leads.filter((l) => l.status_id === s.id);
             return (
