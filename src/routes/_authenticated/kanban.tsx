@@ -111,7 +111,7 @@ function KanbanPage() {
         onDragCancel={() => setActiveId(null)}
       >
         <div className="h-[calc(100vh-220px)] w-full overflow-hidden rounded-lg border bg-card/30 p-3">
-          <div className="flex h-full items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
+          <div className="flex h-full items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2 snap-x snap-mandatory md:snap-none">
             {data.statuses.map((s) => {
               const colLeads = data.leads.filter((l) => l.status_id === s.id);
               return (
@@ -147,7 +147,7 @@ function Column({ id, name, color, count, children }: { id: string; name: string
   return (
     <div
       ref={setNodeRef}
-      className={`flex h-full w-72 shrink-0 flex-col rounded-lg bg-muted/40 p-2 ${isOver ? "ring-2 ring-primary" : ""}`}
+      className={`flex h-full w-[85vw] md:w-72 shrink-0 snap-center flex-col rounded-lg bg-muted/40 p-2 ${isOver ? "ring-2 ring-primary" : ""}`}
     >
       <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1">
         <div className="flex items-center gap-2">
