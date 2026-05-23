@@ -134,7 +134,7 @@ function KanbanCaptacaoPage() {
 function Column({ id, name, color, count, children }: { id: string; name: string; color: string; count: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className={`flex h-full w-[85vw] md:w-72 shrink-0 snap-center md:snap-align-none flex-col rounded-lg bg-muted/40 p-2 ${isOver ? "ring-2 ring-primary" : ""}`}>
+    <div ref={setNodeRef} className={`flex h-full w-[85vw] md:w-72 shrink-0 snap-center flex-col rounded-lg bg-muted/40 p-2 ${isOver ? "ring-2 ring-primary" : ""}`}>
       <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1">
         <div className="flex items-center gap-2">
           <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
