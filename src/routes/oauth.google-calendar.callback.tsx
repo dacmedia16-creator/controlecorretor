@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { exchangeCodeAndStore } from "@/lib/google-calendar.functions";
+import { exchangeCodeAndStore } from "@/lib/google-calendar.server";
 
 export const Route = createFileRoute("/oauth/google-calendar/callback")({
   server: {
