@@ -116,7 +116,6 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     return { eventId: created.id, htmlLink: created.htmlLink, invited: attendees.length > 0 };
   });
 
-  });
 
 export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
