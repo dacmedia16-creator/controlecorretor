@@ -39,6 +39,9 @@ function BrokerKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
+  const [ratingPrompt, setRatingPrompt] = useState<{ candidateId: string; newStatusId: string; prevStatusId: string | null } | null>(null);
+  const [ratingValue, setRatingValue] = useState<string>("");
+
 
   if (role !== "admin" && role !== "recrutador" && role !== "gerente_recrutamento") return <p>Acesso restrito.</p>;
   const isAdmin = role === "admin" || role === "gerente_recrutamento";
