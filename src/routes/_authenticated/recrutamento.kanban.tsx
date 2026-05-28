@@ -13,6 +13,7 @@ import { MessageCircle, Plus, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
 import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateInteractionDialog";
+import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 
 export const Route = createFileRoute("/_authenticated/recrutamento/kanban")({
   component: BrokerKanbanPage,
@@ -107,6 +108,7 @@ function BrokerKanbanPage() {
 
   return (
     <div className="space-y-4">
+      <GoogleCalendarBanner />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Kanban — Recrutamento</h1>
