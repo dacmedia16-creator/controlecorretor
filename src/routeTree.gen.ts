@@ -24,6 +24,7 @@ import { Route as AuthenticatedDistribuicaoRouteImport } from './routes/_authent
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCorretoresRouteImport } from './routes/_authenticated/corretores'
 import { Route as AuthenticatedRecrutamentoIndexRouteImport } from './routes/_authenticated/recrutamento.index'
+import { Route as OauthGoogleCalendarCallbackRouteImport } from './routes/oauth.google-calendar.callback'
 import { Route as AuthenticatedRecrutamentoKanbanRouteImport } from './routes/_authenticated/recrutamento.kanban'
 import { Route as AuthenticatedRecrutamentoDashboardRouteImport } from './routes/_authenticated/recrutamento.dashboard'
 import { Route as AuthenticatedRecrutamentoIdRouteImport } from './routes/_authenticated/recrutamento.$id'
@@ -112,6 +113,12 @@ const AuthenticatedRecrutamentoIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedRecrutamentoRoute,
   } as any)
+const OauthGoogleCalendarCallbackRoute =
+  OauthGoogleCalendarCallbackRouteImport.update({
+    id: '/oauth/google-calendar/callback',
+    path: '/oauth/google-calendar/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedRecrutamentoKanbanRoute =
   AuthenticatedRecrutamentoKanbanRouteImport.update({
     id: '/kanban',
@@ -168,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
   '/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
   '/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
+  '/oauth/google-calendar/callback': typeof OauthGoogleCalendarCallbackRoute
   '/recrutamento/': typeof AuthenticatedRecrutamentoIndexRoute
 }
 export interface FileRoutesByTo {
@@ -189,6 +197,7 @@ export interface FileRoutesByTo {
   '/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
   '/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
   '/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
+  '/oauth/google-calendar/callback': typeof OauthGoogleCalendarCallbackRoute
   '/recrutamento': typeof AuthenticatedRecrutamentoIndexRoute
 }
 export interface FileRoutesById {
@@ -213,6 +222,7 @@ export interface FileRoutesById {
   '/_authenticated/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
   '/_authenticated/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
   '/_authenticated/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
+  '/oauth/google-calendar/callback': typeof OauthGoogleCalendarCallbackRoute
   '/_authenticated/recrutamento/': typeof AuthenticatedRecrutamentoIndexRoute
 }
 export interface FileRouteTypes {
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/recrutamento/$id'
     | '/recrutamento/dashboard'
     | '/recrutamento/kanban'
+    | '/oauth/google-calendar/callback'
     | '/recrutamento/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '/recrutamento/$id'
     | '/recrutamento/dashboard'
     | '/recrutamento/kanban'
+    | '/oauth/google-calendar/callback'
     | '/recrutamento'
   id:
     | '__root__'
@@ -281,6 +293,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recrutamento/$id'
     | '/_authenticated/recrutamento/dashboard'
     | '/_authenticated/recrutamento/kanban'
+    | '/oauth/google-calendar/callback'
     | '/_authenticated/recrutamento/'
   fileRoutesById: FileRoutesById
 }
@@ -288,6 +301,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
+  OauthGoogleCalendarCallbackRoute: typeof OauthGoogleCalendarCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -396,6 +410,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/recrutamento/'
       preLoaderRoute: typeof AuthenticatedRecrutamentoIndexRouteImport
       parentRoute: typeof AuthenticatedRecrutamentoRoute
+    }
+    '/oauth/google-calendar/callback': {
+      id: '/oauth/google-calendar/callback'
+      path: '/oauth/google-calendar/callback'
+      fullPath: '/oauth/google-calendar/callback'
+      preLoaderRoute: typeof OauthGoogleCalendarCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/recrutamento/kanban': {
       id: '/_authenticated/recrutamento/kanban'
@@ -527,6 +548,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
+  OauthGoogleCalendarCallbackRoute: OauthGoogleCalendarCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
