@@ -268,6 +268,9 @@ function CandidateCard({ cand, respName, interviewAt }: { cand: Candidate; respN
       {cand.city && <div className="text-[11px] text-muted-foreground">📍 {cand.city}</div>}
       {respName && <div className="text-[11px] text-muted-foreground">👤 {respName}</div>}
       {interviewFmt && <div className="text-[11px] font-medium text-primary">📅 Entrevista: {interviewFmt}</div>}
+      {cand.interview_rating != null && (
+        <div className="text-[11px] font-medium text-amber-600 flex items-center gap-1"><Star className="size-3 fill-amber-500 text-amber-500" /> Nota: {cand.interview_rating}/10</div>
+      )}
 
       <div className="mt-2 flex flex-wrap gap-1">
         {cand.phone && (
