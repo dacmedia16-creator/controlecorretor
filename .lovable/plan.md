@@ -1,24 +1,65 @@
-## Excluir evento direto da Agenda
+## Causa raiz
 
-Adicionar botão **Excluir** no `Popover` de cada evento em `src/routes/_authenticated/agenda.tsx`.
+No `EventPopover.save()` em `src/routes/_authenticated/agenda.tsx` chamamos:
 
-### Comportamento
-- Botão "Excluir" (variant destructive) abaixo dos botões Salvar/Abrir.
-- Confirmação via `AlertDialog` antes de excluir.
-- Ao confirmar:
-  - Faz `delete` em `broker_candidate_interactions` (id `bci-…`) ou `lead_interactions` (id `li-…`) na linha correspondente.
-  - Se for entrevista e Google Calendar conectado, chamar novo server fn `deleteGoogleCalendarEvent({ candidateId, startISO })` em `src/lib/google-calendar.functions.ts` que busca pelo nome do candidato no `events.list` no horário e chama `events.delete`. Se não encontrar, retorna `{ deleted:false }` e mostra aviso.
-  - Toast de sucesso/erro e `queryClient.invalidateQueries(["agenda", weekStartIso])`.
+```ts
+supabase.from(table).update({ next_follow_up_date: newIso }).eq("id", rowId)
+```
 
-### Permissões
-RLS atual já cobre DELETE via policy "admin all" para admin e "gerente all" para gerente em `broker_candidate_interactions`. Para recrutador/corretor, **não existe policy de DELETE** nas tabelas de interação hoje — só INSERT/SELECT. Logo, recrutadores e corretores receberão erro de permissão ao tentar excluir.
+Mas as policies RLS atuais dessas tabelas **não cobrem UPDATE** para recrutador / corretor / gerente:
 
-Opções:
-1. **Manter como está** — apenas admin/gerente conseguem excluir; UI mostra erro do Supabase para os demais.
-2. **Adicionar policies de DELETE** para o dono da interação (`user_id = auth.uid()`) em ambas as tabelas via migration.
+- `broker_candidate_interactions`: tem `admin all`, `recruiter select/insert`, `gerente select/insert`, `owner delete`, `gerente delete` — **nenhuma para UPDATE**.
+- `lead_interactions`: tem `admin all`, `broker select/insert`, `owner delete` — **nenhuma para UPDATE**.
 
-Recomendo a opção 2 para coerência com a expectativa do usuário ("Todos veem tudo" já foi definido para o escopo da agenda).
+Sem policy de UPDATE, o Postgres não retorna erro: simplesmente filtra 0 linhas. Por isso o `update` "funciona" mas a data não muda. Depois do `invalidateQueries`, a agenda recarrega com o valor antigo.
 
-### Fora do escopo
-- Excluir o candidato/lead vinculado.
-- Lixeira / soft-delete (será DELETE definitivo).
+Admins não veem o problema porque o `... admin all` cobre UPDATE.
+
+## Correção
+
+Migration adicionando policies de UPDATE para o dono da interação (coerente com o que já fizemos para DELETE):
+
+```sql
+-- broker_candidate_interactions
+CREATE POLICY "broker_interactions owner update"
+ON public.broker_candidate_interactions
+FOR UPDATE TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "broker_interactions gerente update"
+ON public.broker_candidate_interactions
+FOR UPDATE TO authenticated
+USING (public.has_role(auth.uid(), 'gerente_recrutamento'))
+WITH CHECK (public.has_role(auth.uid(), 'gerente_recrutamento'));
+
+-- lead_interactions
+CREATE POLICY "interactions owner update"
+ON public.lead_interactions
+FOR UPDATE TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+```
+
+## Robustez no cliente (mesma edit)
+
+Em `src/routes/_authenticated/agenda.tsx`, fazer o `update` retornar a linha alterada e tratar "0 linhas" como erro explícito, para não engolir silenciosamente esse tipo de problema no futuro:
+
+```ts
+const { data: updated, error } = await supabase
+  .from(table)
+  .update({ next_follow_up_date: newIso })
+  .eq("id", rowId)
+  .select("id");
+
+if (error) { toast.error(error.message); return; }
+if (!updated || updated.length === 0) {
+  toast.error("Sem permissão para alterar este compromisso.");
+  return;
+}
+```
+
+## Fora do escopo
+
+- Permitir que qualquer usuário (não dono e não gerente) edite interações alheias.
+- Mudar lógica de Google Calendar (que já funciona quando a interação está no escopo do usuário).
