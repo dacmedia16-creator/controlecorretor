@@ -13,8 +13,10 @@ import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
 import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent } from "@/lib/google-calendar.functions";
 
+export const Route = createFileRoute("/_authenticated/agenda")({
   component: AgendaPage,
 });
+
 
 type EventKind = "entrevista" | "followup_candidato" | "followup_lead";
 type AgendaEvent = {
