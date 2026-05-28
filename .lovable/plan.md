@@ -1,27 +1,26 @@
-# Corrigir erro "crypto externalized for browser"
+# Corrigir erro 403 "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
 
-## Causa
-`src/lib/google-calendar.functions.ts` faz `import { createHmac } from "crypto"` no topo do arquivo. Esse arquivo também é importado por componentes do client (ex.: `GoogleCalendarBanner`, `BrokerCandidateInteractionDialog`). O Vite externaliza `crypto` no browser → qualquer acesso quebra o app inteiro com a tela "Algo deu errado".
+## Diagnóstico
+A conta `dacmedia16@gmail.com` foi conectada antes do escopo `calendar.events` ser solicitado. O token armazenado tem só `openid`/`email`, então qualquer chamada para `calendar.v3.Events.Insert` retorna 403.
 
-A regra do TanStack: módulos com server-only code (Node `crypto`, service role key, etc.) devem viver em `*.server.ts` e nunca ser importados estaticamente por arquivos client.
+A mensagem do Google é clara:
+> "Request had insufficient authentication scopes" / `ACCESS_TOKEN_SCOPE_INSUFFICIENT`
 
-## Mudanças
+Não é bug de código — é o token salvo no banco que está sem permissão de Calendar.
 
-1. **Criar `src/lib/google-calendar-state.server.ts`**
-   - Mover para lá as funções `signState()` e `verifyState()` que usam `createHmac` e `timingSafeEqual`.
-   - Sufixo `.server.ts` garante que o bundler do client rejeite qualquer importação acidental.
+## Solução (1 clique seu, sem mudança de código)
 
-2. **Editar `src/lib/google-calendar.functions.ts`**
-   - Remover `import { createHmac, timingSafeEqual } from "crypto"`.
-   - Importar `signState`/`verifyState` de `./google-calendar-state.server` (uso somente dentro de `.handler()` dos serverFns, então fica isolado no bundle server).
-   - Manter toda a API pública (mesmas funções `startGoogleCalendarConnect`, `getMyGoogleCalendarStatus`, `disconnectGoogleCalendar`, `createGoogleCalendarEvent`) — nada muda para os componentes que já consomem.
+1. No banner verde no topo da página de Recrutamento, clicar em **Desconectar**.
+2. Clicar de novo em **Conectar Google Calendar**.
+3. Na tela de consentimento do Google, **marcar a permissão** "Ver, editar, compartilhar e excluir permanentemente todos os calendários…" (a checkbox precisa ficar marcada — se desmarcar, o token volta a vir sem escopo de Calendar).
+4. Tentar agendar a entrevista novamente.
 
-3. **Editar `src/routes/oauth.google-calendar.callback.tsx`**
-   - Se ele importar `crypto` diretamente, trocar pela mesma helper `verifyState` do `*.server.ts`. (Vou confirmar no arquivo antes de editar.)
+## Por que não precisa código novo
+- O fluxo OAuth já pede `calendar.events` no `scope` (`src/lib/google-calendar.server.ts` → `GOOGLE_CALENDAR_SCOPES`).
+- Já uso `prompt: "consent"` e `access_type: "offline"`, então a reconexão vai exibir a tela de permissões de novo e gravar um novo `refresh_token` com o escopo correto.
+- O `disconnectGoogleCalendar` apaga a linha em `user_google_calendar_connections`, então a próxima conexão grava tokens limpos.
 
-## Sem mudanças
-- Nenhuma alteração de UI, banco de dados, secrets, fluxo OAuth ou tabelas.
-- Nenhuma alteração nas URIs de redirect do Google Cloud.
+## Opcional (posso fazer se quiser)
+- Detectar a string `ACCESS_TOKEN_SCOPE_INSUFFICIENT` no `createGoogleCalendarEvent` e devolver uma mensagem amigável tipo *"Reconecte o Google Calendar para conceder permissão de agenda"* em vez do JSON cru do Google.
 
-## Resultado esperado
-Preview volta a abrir normalmente; banner do Google Calendar e fluxo de conexão continuam funcionando como antes.
+Me confirma se quer só reconectar (resolve agora) ou se quer também essa melhoria de mensagem de erro.
