@@ -147,8 +147,10 @@ function BrokerKanbanPage() {
                       key={c.id}
                       cand={c}
                       respName={c.assigned_to_user_id ? (profileById.get(c.assigned_to_user_id)?.name ?? null) : null}
+                      interviewAt={data.interviewByCand.get(c.id) ?? null}
                     />
                   ))}
+
                 </Column>
               );
             })}
