@@ -128,7 +128,6 @@ function BrokerKanbanPage() {
     qc.invalidateQueries({ queryKey });
   }
 
-  }
 
   if (isLoading || !data) return <div>Carregando…</div>;
   const activeCand = activeId ? data.candidates.find((c) => c.id === activeId) : null;
