@@ -207,8 +207,34 @@ function BrokerKanbanPage() {
       </DndContext>
 
       <BrokerCandidateFormDialog open={openNew} onOpenChange={setOpenNew} />
+
+      <Dialog open={!!ratingPrompt} onOpenChange={(o) => { if (!o) { setRatingPrompt(null); setRatingValue(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nota da entrevista</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Nota (0 a 10)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              step={1}
+              value={ratingValue}
+              onChange={(e) => setRatingValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRatingPrompt(null); setRatingValue(""); }}>Cancelar</Button>
+            <Button onClick={confirmRating}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
 }
 
 function Column({ id, name, color, count, children }: { id: string; name: string; color: string; count: number; children: React.ReactNode }) {
