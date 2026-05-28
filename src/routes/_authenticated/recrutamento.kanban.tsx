@@ -7,17 +7,17 @@ import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { whatsappUrl } from "@/lib/constants";
-import { MessageCircle, Plus, StickyNote } from "lucide-react";
+import { MessageCircle, Plus, StickyNote, Star } from "lucide-react";
 import { toast } from "sonner";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
 import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateInteractionDialog";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 
-export const Route = createFileRoute("/_authenticated/recrutamento/kanban")({
-  component: BrokerKanbanPage,
-});
 
 type Candidate = {
   id: string;
@@ -28,7 +28,10 @@ type Candidate = {
   status_id: string | null;
   assigned_to_user_id: string | null;
   updated_at: string;
+  interview_rating: number | null;
 };
+
+
 
 function BrokerKanbanPage() {
   const { role } = useAuth();
@@ -36,6 +39,9 @@ function BrokerKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
+  const [ratingPrompt, setRatingPrompt] = useState<{ candidateId: string; newStatusId: string; prevStatusId: string | null } | null>(null);
+  const [ratingValue, setRatingValue] = useState<string>("");
+
 
   if (role !== "admin" && role !== "recrutador" && role !== "gerente_recrutamento") return <p>Acesso restrito.</p>;
   const isAdmin = role === "admin" || role === "gerente_recrutamento";
@@ -46,7 +52,7 @@ function BrokerKanbanPage() {
     queryFn: async () => {
       const nowIso = new Date().toISOString();
       const [cands, statuses, profiles, interviews] = await Promise.all([
-        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,assigned_to_user_id,updated_at").order("updated_at", { ascending: false }),
+        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,assigned_to_user_id,updated_at,interview_rating").order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color,position").eq("kanban_type", "broker_recruitment").eq("active", true).order("position"),
         supabase.from("profiles").select("id,name,email"),
         supabase.from("broker_candidate_interactions")
@@ -71,7 +77,6 @@ function BrokerKanbanPage() {
 
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
   async function onDragEnd(e: DragEndEvent) {
     setActiveId(null);
     if (!e.over || !data) return;
@@ -79,6 +84,15 @@ function BrokerKanbanPage() {
     const newStatusId = String(e.over.id);
     const c = data.candidates.find((x) => x.id === id);
     if (!c || c.status_id === newStatusId) return;
+
+    const newStatus = data.statuses.find((s) => s.id === newStatusId);
+    const isInterviewDone = newStatus?.name?.toLowerCase().trim() === "entrevista realizada";
+
+    if (isInterviewDone) {
+      setRatingValue(c.interview_rating != null ? String(c.interview_rating) : "");
+      setRatingPrompt({ candidateId: id, newStatusId, prevStatusId: c.status_id });
+      return;
+    }
 
     qc.setQueryData<any>(queryKey, (old: any) => {
       if (!old) return old;
@@ -90,6 +104,30 @@ function BrokerKanbanPage() {
     else toast.success("Etapa atualizada");
     qc.invalidateQueries({ queryKey });
   }
+
+  async function confirmRating() {
+    if (!ratingPrompt) return;
+    const n = Number(ratingValue);
+    if (!Number.isFinite(n) || n < 0 || n > 10) {
+      toast.error("Informe uma nota de 0 a 10");
+      return;
+    }
+    const { candidateId, newStatusId } = ratingPrompt;
+    qc.setQueryData<any>(queryKey, (old: any) => {
+      if (!old) return old;
+      return { ...old, candidates: old.candidates.map((x: Candidate) => x.id === candidateId ? { ...x, status_id: newStatusId, interview_rating: n } : x) };
+    });
+    const { error } = await supabase
+      .from("broker_candidates")
+      .update({ status_id: newStatusId, interview_rating: n })
+      .eq("id", candidateId);
+    if (error) toast.error(error.message);
+    else toast.success(`Entrevista registrada — nota ${n}`);
+    setRatingPrompt(null);
+    setRatingValue("");
+    qc.invalidateQueries({ queryKey });
+  }
+
 
   if (isLoading || !data) return <div>Carregando…</div>;
   const activeCand = activeId ? data.candidates.find((c) => c.id === activeId) : null;
@@ -169,9 +207,35 @@ function BrokerKanbanPage() {
       </DndContext>
 
       <BrokerCandidateFormDialog open={openNew} onOpenChange={setOpenNew} />
+
+      <Dialog open={!!ratingPrompt} onOpenChange={(o) => { if (!o) { setRatingPrompt(null); setRatingValue(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nota da entrevista</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Nota (0 a 10)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              step={1}
+              value={ratingValue}
+              onChange={(e) => setRatingValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRatingPrompt(null); setRatingValue(""); }}>Cancelar</Button>
+            <Button onClick={confirmRating}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+
 
 function Column({ id, name, color, count, children }: { id: string; name: string; color: string; count: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -204,6 +268,9 @@ function CandidateCard({ cand, respName, interviewAt }: { cand: Candidate; respN
       {cand.city && <div className="text-[11px] text-muted-foreground">📍 {cand.city}</div>}
       {respName && <div className="text-[11px] text-muted-foreground">👤 {respName}</div>}
       {interviewFmt && <div className="text-[11px] font-medium text-primary">📅 Entrevista: {interviewFmt}</div>}
+      {cand.interview_rating != null && (
+        <div className="text-[11px] font-medium text-amber-600 flex items-center gap-1"><Star className="size-3 fill-amber-500 text-amber-500" /> Nota: {cand.interview_rating}/10</div>
+      )}
 
       <div className="mt-2 flex flex-wrap gap-1">
         {cand.phone && (

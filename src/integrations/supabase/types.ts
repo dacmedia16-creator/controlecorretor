@@ -66,6 +66,7 @@ export type Database = {
           general_notes: string | null
           hired_user_id: string | null
           id: string
+          interview_rating: number | null
           linkedin_url: string | null
           name: string
           phone: string | null
@@ -86,6 +87,7 @@ export type Database = {
           general_notes?: string | null
           hired_user_id?: string | null
           id?: string
+          interview_rating?: number | null
           linkedin_url?: string | null
           name: string
           phone?: string | null
@@ -106,6 +108,7 @@ export type Database = {
           general_notes?: string | null
           hired_user_id?: string | null
           id?: string
+          interview_rating?: number | null
           linkedin_url?: string | null
           name?: string
           phone?: string | null

@@ -1,0 +1,1 @@
+ALTER TABLE public.broker_candidates ADD COLUMN IF NOT EXISTS interview_rating smallint CHECK (interview_rating >= 0 AND interview_rating <= 10);
