@@ -77,7 +77,6 @@ function BrokerKanbanPage() {
 
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
   async function onDragEnd(e: DragEndEvent) {
     setActiveId(null);
     if (!e.over || !data) return;
@@ -85,6 +84,15 @@ function BrokerKanbanPage() {
     const newStatusId = String(e.over.id);
     const c = data.candidates.find((x) => x.id === id);
     if (!c || c.status_id === newStatusId) return;
+
+    const newStatus = data.statuses.find((s) => s.id === newStatusId);
+    const isInterviewDone = newStatus?.name?.toLowerCase().trim() === "entrevista realizada";
+
+    if (isInterviewDone) {
+      setRatingValue(c.interview_rating != null ? String(c.interview_rating) : "");
+      setRatingPrompt({ candidateId: id, newStatusId, prevStatusId: c.status_id });
+      return;
+    }
 
     qc.setQueryData<any>(queryKey, (old: any) => {
       if (!old) return old;
@@ -95,6 +103,31 @@ function BrokerKanbanPage() {
     if (error) toast.error(error.message);
     else toast.success("Etapa atualizada");
     qc.invalidateQueries({ queryKey });
+  }
+
+  async function confirmRating() {
+    if (!ratingPrompt) return;
+    const n = Number(ratingValue);
+    if (!Number.isFinite(n) || n < 0 || n > 10) {
+      toast.error("Informe uma nota de 0 a 10");
+      return;
+    }
+    const { candidateId, newStatusId } = ratingPrompt;
+    qc.setQueryData<any>(queryKey, (old: any) => {
+      if (!old) return old;
+      return { ...old, candidates: old.candidates.map((x: Candidate) => x.id === candidateId ? { ...x, status_id: newStatusId, interview_rating: n } : x) };
+    });
+    const { error } = await supabase
+      .from("broker_candidates")
+      .update({ status_id: newStatusId, interview_rating: n })
+      .eq("id", candidateId);
+    if (error) toast.error(error.message);
+    else toast.success(`Entrevista registrada — nota ${n}`);
+    setRatingPrompt(null);
+    setRatingValue("");
+    qc.invalidateQueries({ queryKey });
+  }
+
   }
 
   if (isLoading || !data) return <div>Carregando…</div>;
