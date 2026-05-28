@@ -19,16 +19,18 @@ import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateIn
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 
 
-export const Route = createFileRoute("/_authenticated/recrutamento/kanban")({
-  component: BrokerKanbanPage,
-});
-
 type Candidate = {
   id: string;
   name: string;
   phone: string | null;
   email: string | null;
   city: string | null;
+  status_id: string | null;
+  assigned_to_user_id: string | null;
+  updated_at: string;
+  interview_rating: number | null;
+};
+
   status_id: string | null;
   assigned_to_user_id: string | null;
   updated_at: string;
