@@ -114,8 +114,8 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     }
     const created = await res.json() as { id: string; htmlLink: string };
     return { eventId: created.id, htmlLink: created.htmlLink, invited: attendees.length > 0 };
-    const created = await res.json() as { id: string; htmlLink: string };
-    return { eventId: created.id, htmlLink: created.htmlLink, invited: attendees.length > 0 };
+  });
+
   });
 
 export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
