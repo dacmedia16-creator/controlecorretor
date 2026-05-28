@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { ChevronLeft, ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
