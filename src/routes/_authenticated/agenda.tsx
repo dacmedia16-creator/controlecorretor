@@ -1,14 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
+import { toast } from "sonner";
+import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent } from "@/lib/google-calendar.functions";
 
-export const Route = createFileRoute("/_authenticated/agenda")({
   component: AgendaPage,
 });
 
