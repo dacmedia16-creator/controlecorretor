@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trello, MessageCircle } from "lucide-react";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
+import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { whatsappUrl, labelOf, SOURCES, formatDate } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/recrutamento/")({
@@ -109,6 +110,7 @@ function RecrutamentoPage() {
 
   return (
     <div className="space-y-4">
+      <GoogleCalendarBanner />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Recrutamento de Corretores</h1>
