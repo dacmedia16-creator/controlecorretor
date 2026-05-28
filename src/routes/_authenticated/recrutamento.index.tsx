@@ -162,10 +162,15 @@ function RecrutamentoPage() {
             {list.map((c) => {
               const st = c.status_id ? statusById.get(c.status_id) : null;
               const resp = c.assigned_to_user_id ? profileById.get(c.assigned_to_user_id) : null;
+              const interviewAt = data.interviewByCand.get(c.id) ?? null;
+              const interviewFmt = interviewAt
+                ? new Date(interviewAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                : null;
               return (
                 <tr key={c.id} className="border-t">
                   <td className="px-3 py-2">
                     <Link to="/recrutamento/$id" params={{ id: c.id }} className="font-medium text-primary hover:underline">{c.name}</Link>
+                    {interviewFmt && <div className="text-[11px] font-medium text-primary">📅 Entrevista: {interviewFmt}</div>}
                   </td>
                   <td className="px-3 py-2 text-xs">
                     <div>{c.email ?? "—"}</div>
@@ -176,6 +181,7 @@ function RecrutamentoPage() {
                       )}
                     </div>
                   </td>
+
                   <td className="px-3 py-2">{c.city ?? "—"}</td>
                   <td className="px-3 py-2">{c.creci ?? "—"}</td>
                   <td className="px-3 py-2">{labelOf(SOURCES, c.source)}</td>
