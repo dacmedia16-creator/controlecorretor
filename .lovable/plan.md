@@ -1,26 +1,24 @@
-# Corrigir erro 403 "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+# Mostrar data da entrevista mesmo quando já passou
 
 ## Diagnóstico
-A conta `dacmedia16@gmail.com` foi conectada antes do escopo `calendar.events` ser solicitado. O token armazenado tem só `openid`/`email`, então qualquer chamada para `calendar.v3.Events.Insert` retorna 403.
+A consulta que alimenta o badge "📅 Entrevista" no kanban filtra:
 
-A mensagem do Google é clara:
-> "Request had insufficient authentication scopes" / `ACCESS_TOKEN_SCOPE_INSUFFICIENT`
+```ts
+.gte("next_follow_up_date", nowIso)   // só datas futuras
+```
 
-Não é bug de código — é o token salvo no banco que está sem permissão de Calendar.
+A entrevista da **Tainara Cristina** está marcada para **28/05 15:00 UTC** (≈ 12:00 BR) — agora já são 12:01 BR, então o filtro descarta a linha e o card fica sem o badge. A da **Gabi** é amanhã (29/05 10:00), então passa no filtro.
 
-## Solução (1 clique seu, sem mudança de código)
+Resumo: o card "esquece" a entrevista assim que o horário passa, mesmo o candidato continuando na coluna *Entrevista marcada*.
 
-1. No banner verde no topo da página de Recrutamento, clicar em **Desconectar**.
-2. Clicar de novo em **Conectar Google Calendar**.
-3. Na tela de consentimento do Google, **marcar a permissão** "Ver, editar, compartilhar e excluir permanentemente todos os calendários…" (a checkbox precisa ficar marcada — se desmarcar, o token volta a vir sem escopo de Calendar).
-4. Tentar agendar a entrevista novamente.
+## Correção
 
-## Por que não precisa código novo
-- O fluxo OAuth já pede `calendar.events` no `scope` (`src/lib/google-calendar.server.ts` → `GOOGLE_CALENDAR_SCOPES`).
-- Já uso `prompt: "consent"` e `access_type: "offline"`, então a reconexão vai exibir a tela de permissões de novo e gravar um novo `refresh_token` com o escopo correto.
-- O `disconnectGoogleCalendar` apaga a linha em `user_google_calendar_connections`, então a próxima conexão grava tokens limpos.
+Em `src/routes/_authenticated/recrutamento.kanban.tsx` e `src/routes/_authenticated/recrutamento.index.tsx`:
 
-## Opcional (posso fazer se quiser)
-- Detectar a string `ACCESS_TOKEN_SCOPE_INSUFFICIENT` no `createGoogleCalendarEvent` e devolver uma mensagem amigável tipo *"Reconecte o Google Calendar para conceder permissão de agenda"* em vez do JSON cru do Google.
+1. Remover o filtro `gte("next_follow_up_date", nowIso)` da consulta de `broker_candidate_interactions`.
+2. Trocar a ordenação para `order("next_follow_up_date", { ascending: false })` e manter a lógica `if (!map.has(id)) map.set(...)` — assim cada candidato recebe a **última entrevista agendada** (mais recente), independente de ser passada ou futura.
+3. Nenhuma mudança em UI/estilo: o badge continua aparecendo igual ao da Gabi, só que agora também para entrevistas que já aconteceram.
 
-Me confirma se quer só reconectar (resolve agora) ou se quer também essa melhoria de mensagem de erro.
+## Fora de escopo
+- Não mudo o fluxo de criação de entrevista, Google Calendar, fuso horário, nem o formato exibido.
+- Se mais tarde você quiser diferenciar visualmente "entrevista passada" (ex.: cor cinza em vez de azul), faço numa próxima rodada.
