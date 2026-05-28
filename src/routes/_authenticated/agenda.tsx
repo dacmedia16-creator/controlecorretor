@@ -1,16 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
+import { toast } from "sonner";
+import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent } from "@/lib/google-calendar.functions";
 
 export const Route = createFileRoute("/_authenticated/agenda")({
   component: AgendaPage,
 });
+
 
 type EventKind = "entrevista" | "followup_candidato" | "followup_lead";
 type AgendaEvent = {
@@ -188,32 +194,9 @@ function AgendaPage() {
                   )}
                   {/* eventos */}
                   {dayEvents.map((ev) => (
-                    <Popover key={ev.id}>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
-                          style={eventStyle(ev)}
-                        >
-                          <div className="font-semibold">{fmtTime(ev.date)}</div>
-                          <div className="truncate">{ev.title}</div>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-72 space-y-2 text-sm">
-                        <div className="text-xs font-medium text-muted-foreground">{labelOf[ev.kind]}</div>
-                        <div className="font-semibold">{ev.title}</div>
-                        <div className="text-xs">{ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</div>
-                        {ev.phone && (
-                          <a href={whatsappUrl(ev.phone)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
-                            <MessageCircle className="size-3" /> {ev.phone}
-                          </a>
-                        )}
-                        {ev.notes && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{ev.notes}</p>}
-                        <Button asChild size="sm" variant="outline" className="w-full">
-                          <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
-                        </Button>
-                      </PopoverContent>
-                    </Popover>
+                    <EventPopover key={ev.id} ev={ev} colorOf={colorOf} labelOf={labelOf} style={eventStyle(ev)} weekStartIso={weekStart.toISOString()} />
                   ))}
+
                 </div>
               );
             })}
@@ -226,3 +209,125 @@ function AgendaPage() {
     </div>
   );
 }
+
+function toLocalInput(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function EventPopover({
+  ev, colorOf, labelOf, style, weekStartIso,
+}: {
+  ev: AgendaEvent;
+  colorOf: Record<EventKind, string>;
+  labelOf: Record<EventKind, string>;
+  style: React.CSSProperties;
+  weekStartIso: string;
+}) {
+  const qc = useQueryClient();
+  const [newDt, setNewDt] = useState(() => toLocalInput(ev.date));
+  const [duration, setDuration] = useState(30);
+  const [saving, setSaving] = useState(false);
+
+  const isInterview = ev.kind === "entrevista";
+  const getStatus = useServerFn(getMyGoogleCalendarStatus);
+  const patchEvent = useServerFn(updateGoogleCalendarEvent);
+  const { data: gcalStatus } = useQuery({
+    queryKey: ["gcal-status"],
+    queryFn: () => getStatus(),
+    enabled: isInterview,
+  });
+  const calendarConnected = !!gcalStatus?.connected;
+
+  async function save() {
+    if (!newDt) return;
+    setSaving(true);
+    const newIso = new Date(newDt).toISOString();
+    const table = ev.id.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
+    const rowId = ev.id.replace(/^(bci|li)-/, "");
+    const { error } = await supabase
+      .from(table)
+      .update({ next_follow_up_date: newIso })
+      .eq("id", rowId);
+    if (error) {
+      setSaving(false);
+      toast.error(error.message);
+      return;
+    }
+
+    if (isInterview && calendarConnected) {
+      try {
+        const r = await patchEvent({
+          data: {
+            candidateId: ev.link.params.id,
+            oldStartISO: ev.date.toISOString(),
+            newStartISO: newIso,
+            durationMinutes: duration,
+          },
+        });
+        toast.success(r.updated
+          ? "Compromisso atualizado e movido no Google Calendar"
+          : "Atualizado no sistema; evento não localizado no Google Calendar");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "erro";
+        toast.error(`Atualizado no sistema, mas falhou no Google Calendar: ${msg}`);
+      }
+    } else {
+      toast.success("Compromisso atualizado");
+    }
+
+    setSaving(false);
+    qc.invalidateQueries({ queryKey: ["agenda", weekStartIso] });
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
+          style={style}
+        >
+          <div className="font-semibold">{ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+          <div className="truncate">{ev.title}</div>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 space-y-3 text-sm">
+        <div>
+          <div className="text-xs font-medium text-muted-foreground">{labelOf[ev.kind]}</div>
+          <div className="font-semibold">{ev.title}</div>
+        </div>
+        {ev.phone && (
+          <a href={whatsappUrl(ev.phone)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
+            <MessageCircle className="size-3" /> {ev.phone}
+          </a>
+        )}
+        {ev.notes && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{ev.notes}</p>}
+        <div className="space-y-1">
+          <Label className="text-xs">Data e hora</Label>
+          <Input type="datetime-local" value={newDt} onChange={(e) => setNewDt(e.target.value)} />
+        </div>
+        {isInterview && calendarConnected && (
+          <div className="space-y-1">
+            <Label className="text-xs">Duração (min) — Google Calendar</Label>
+            <Input
+              type="number"
+              min={5}
+              max={480}
+              value={duration}
+              onChange={(e) => setDuration(Math.max(5, Math.min(480, Number(e.target.value) || 30)))}
+            />
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button size="sm" onClick={save} disabled={saving} className="flex-1">
+            {saving ? "Salvando…" : "Salvar"}
+          </Button>
+          <Button asChild size="sm" variant="outline" className="flex-1">
+            <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+

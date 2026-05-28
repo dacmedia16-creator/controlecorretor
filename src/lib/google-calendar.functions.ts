@@ -115,3 +115,70 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     const created = await res.json() as { id: string; htmlLink: string };
     return { eventId: created.id, htmlLink: created.htmlLink, invited: attendees.length > 0 };
   });
+
+
+export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    candidateId: z.string().uuid(),
+    oldStartISO: z.string().min(1),
+    newStartISO: z.string().min(1),
+    durationMinutes: z.number().int().min(5).max(480).default(30),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const accessToken = await getFreshAccessToken(context.userId);
+
+    const { data: cand } = await supabaseAdmin
+      .from("broker_candidates")
+      .select("name")
+      .eq("id", data.candidateId)
+      .maybeSingle();
+    if (!cand) throw new Error("Candidato não encontrado");
+
+    const oldStart = new Date(data.oldStartISO);
+    const timeMin = new Date(oldStart.getTime() - 5 * 60_000).toISOString();
+    const timeMax = new Date(oldStart.getTime() + 5 * 60_000).toISOString();
+
+    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+      new URLSearchParams({
+        q: cand.name,
+        timeMin,
+        timeMax,
+        singleEvents: "true",
+        maxResults: "10",
+      }).toString();
+
+    const listRes = await fetch(listUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!listRes.ok) {
+      const t = await listRes.text();
+      throw new Error(`Google Calendar API ${listRes.status}: ${t}`);
+    }
+    const listed = await listRes.json() as { items?: Array<{ id: string; summary?: string }> };
+    const match = (listed.items ?? []).find((e) => (e.summary ?? "").includes(cand.name));
+    if (!match) return { updated: false };
+
+    const newStart = new Date(data.newStartISO);
+    const newEnd = new Date(newStart.getTime() + data.durationMinutes * 60_000);
+    const patchRes = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${match.id}?sendUpdates=all`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          start: { dateTime: newStart.toISOString(), timeZone: "America/Sao_Paulo" },
+          end: { dateTime: newEnd.toISOString(), timeZone: "America/Sao_Paulo" },
+        }),
+      },
+    );
+    if (!patchRes.ok) {
+      const t = await patchRes.text();
+      throw new Error(`Google Calendar API ${patchRes.status}: ${t}`);
+    }
+    return { updated: true };
+  });
+
