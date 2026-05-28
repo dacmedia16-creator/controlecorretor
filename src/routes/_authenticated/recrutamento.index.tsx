@@ -30,18 +30,31 @@ function RecrutamentoPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["broker-candidates"],
     queryFn: async () => {
-      const [cands, statuses, profiles] = await Promise.all([
+      const nowIso = new Date().toISOString();
+      const [cands, statuses, profiles, interviews] = await Promise.all([
         supabase.from("broker_candidates").select("*").order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color").eq("kanban_type", "broker_recruitment"),
         supabase.from("profiles").select("id,name,email"),
+        supabase.from("broker_candidate_interactions")
+          .select("candidate_id,next_follow_up_date")
+          .eq("interaction_type", "entrevista")
+          .not("next_follow_up_date", "is", null)
+          .gte("next_follow_up_date", nowIso)
+          .order("next_follow_up_date", { ascending: true }),
       ]);
+      const interviewByCand = new Map<string, string>();
+      for (const i of interviews.data ?? []) {
+        if (!interviewByCand.has(i.candidate_id)) interviewByCand.set(i.candidate_id, i.next_follow_up_date as string);
+      }
       return {
         candidates: cands.data ?? [],
         statuses: statuses.data ?? [],
         profiles: profiles.data ?? [],
+        interviewByCand,
       };
     },
   });
+
 
   const { data: recruiters } = useQuery({
     queryKey: ["recruiters-managers-and-admins"],
@@ -149,10 +162,15 @@ function RecrutamentoPage() {
             {list.map((c) => {
               const st = c.status_id ? statusById.get(c.status_id) : null;
               const resp = c.assigned_to_user_id ? profileById.get(c.assigned_to_user_id) : null;
+              const interviewAt = data.interviewByCand.get(c.id) ?? null;
+              const interviewFmt = interviewAt
+                ? new Date(interviewAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                : null;
               return (
                 <tr key={c.id} className="border-t">
                   <td className="px-3 py-2">
                     <Link to="/recrutamento/$id" params={{ id: c.id }} className="font-medium text-primary hover:underline">{c.name}</Link>
+                    {interviewFmt && <div className="text-[11px] font-medium text-primary">📅 Entrevista: {interviewFmt}</div>}
                   </td>
                   <td className="px-3 py-2 text-xs">
                     <div>{c.email ?? "—"}</div>
@@ -163,6 +181,7 @@ function RecrutamentoPage() {
                       )}
                     </div>
                   </td>
+
                   <td className="px-3 py-2">{c.city ?? "—"}</td>
                   <td className="px-3 py-2">{c.creci ?? "—"}</td>
                   <td className="px-3 py-2">{labelOf(SOURCES, c.source)}</td>

@@ -43,18 +43,31 @@ function BrokerKanbanPage() {
   const { data, isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
-      const [cands, statuses, profiles] = await Promise.all([
+      const nowIso = new Date().toISOString();
+      const [cands, statuses, profiles, interviews] = await Promise.all([
         supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,assigned_to_user_id,updated_at").order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color,position").eq("kanban_type", "broker_recruitment").eq("active", true).order("position"),
         supabase.from("profiles").select("id,name,email"),
+        supabase.from("broker_candidate_interactions")
+          .select("candidate_id,next_follow_up_date")
+          .eq("interaction_type", "entrevista")
+          .not("next_follow_up_date", "is", null)
+          .gte("next_follow_up_date", nowIso)
+          .order("next_follow_up_date", { ascending: true }),
       ]);
+      const interviewByCand = new Map<string, string>();
+      for (const i of interviews.data ?? []) {
+        if (!interviewByCand.has(i.candidate_id)) interviewByCand.set(i.candidate_id, i.next_follow_up_date as string);
+      }
       return {
         candidates: (cands.data ?? []) as Candidate[],
         statuses: statuses.data ?? [],
         profiles: profiles.data ?? [],
+        interviewByCand,
       };
     },
   });
+
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -134,8 +147,10 @@ function BrokerKanbanPage() {
                       key={c.id}
                       cand={c}
                       respName={c.assigned_to_user_id ? (profileById.get(c.assigned_to_user_id)?.name ?? null) : null}
+                      interviewAt={data.interviewByCand.get(c.id) ?? null}
                     />
                   ))}
+
                 </Column>
               );
             })}
@@ -172,17 +187,22 @@ function Column({ id, name, color, count, children }: { id: string; name: string
   );
 }
 
-function CandidateCard({ cand, respName }: { cand: Candidate; respName: string | null }) {
+function CandidateCard({ cand, respName, interviewAt }: { cand: Candidate; respName: string | null; interviewAt: string | null }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: cand.id });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
   const [obsOpen, setObsOpen] = useState(false);
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const interviewFmt = interviewAt
+    ? new Date(interviewAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : null;
   return (
     <Card ref={setNodeRef} style={style} {...attributes} {...listeners} className={`p-3 cursor-grab text-sm ${isDragging ? "opacity-40" : ""}`}>
       <Link to="/recrutamento/$id" params={{ id: cand.id }} onPointerDown={(e) => e.stopPropagation()} className="font-medium hover:underline">{cand.name}</Link>
       <div className="text-xs text-muted-foreground">{cand.phone ?? "Sem telefone"}</div>
       {cand.city && <div className="text-[11px] text-muted-foreground">📍 {cand.city}</div>}
       {respName && <div className="text-[11px] text-muted-foreground">👤 {respName}</div>}
+      {interviewFmt && <div className="text-[11px] font-medium text-primary">📅 Entrevista: {interviewFmt}</div>}
+
       <div className="mt-2 flex flex-wrap gap-1">
         {cand.phone && (
           <a href={whatsappUrl(cand.phone)} target="_blank" rel="noreferrer" onClick={stop} onPointerDown={stop}>
