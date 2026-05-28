@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { to: "/recrutamento", label: "Recrutamento", icon: UserPlus, roles: ["admin", "recrutador", "gerente_recrutamento"] },
   { to: "/recrutamento/kanban", label: "Kanban Recrutamento", icon: Trello, roles: ["recrutador", "gerente_recrutamento"] },
   { to: "/corretores", label: "Usuários", icon: Users, roles: ["admin", "gerente_recrutamento"] },
+  { to: "/agenda", label: "Agenda", icon: CalendarDays, roles: ["admin", "corretor", "recrutador", "gerente_recrutamento"] },
   { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin", "recrutador", "gerente_recrutamento"] },
 ];
 
