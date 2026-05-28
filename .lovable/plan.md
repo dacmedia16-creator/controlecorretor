@@ -1,24 +1,37 @@
-# Mostrar data da entrevista mesmo quando já passou
+# Salvar entrevista no fuso de Brasília (corrigir 15:00 vs 12:00)
 
-## Diagnóstico
-A consulta que alimenta o badge "📅 Entrevista" no kanban filtra:
+## Causa raiz
+Em `src/components/BrokerCandidateInteractionDialog.tsx`, o input `datetime-local` devolve uma string sem fuso (ex.: `"2026-05-28T15:00"`). O código grava ela direto:
 
 ```ts
-.gte("next_follow_up_date", nowIso)   // só datas futuras
+next_follow_up_date: followUp || null,
 ```
 
-A entrevista da **Tainara Cristina** está marcada para **28/05 15:00 UTC** (≈ 12:00 BR) — agora já são 12:01 BR, então o filtro descarta a linha e o card fica sem o badge. A da **Gabi** é amanhã (29/05 10:00), então passa no filtro.
+O Postgres interpreta string sem fuso como **UTC**. Resultado:
+- Você marca **15:00** (intenção: 15:00 BR)
+- Banco grava **2026-05-28 15:00:00+00** (15:00 UTC = **12:00 BR**)
+- O kanban filtra `>= now()`. Agora são 12:01 BR → 15:00 UTC já passou → o badge desaparece.
 
-Resumo: o card "esquece" a entrevista assim que o horário passa, mesmo o candidato continuando na coluna *Entrevista marcada*.
+O Google Calendar funciona porque lá o código usa `new Date(followUp).toISOString()`, que aplica o fuso do navegador corretamente. O bug é só no INSERT no banco.
 
 ## Correção
 
-Em `src/routes/_authenticated/recrutamento.kanban.tsx` e `src/routes/_authenticated/recrutamento.index.tsx`:
+**Arquivo: `src/components/BrokerCandidateInteractionDialog.tsx`**
 
-1. Remover o filtro `gte("next_follow_up_date", nowIso)` da consulta de `broker_candidate_interactions`.
-2. Trocar a ordenação para `order("next_follow_up_date", { ascending: false })` e manter a lógica `if (!map.has(id)) map.set(...)` — assim cada candidato recebe a **última entrevista agendada** (mais recente), independente de ser passada ou futura.
-3. Nenhuma mudança em UI/estilo: o badge continua aparecendo igual ao da Gabi, só que agora também para entrevistas que já aconteceram.
+Trocar a linha do insert para converter o datetime-local em ISO com fuso antes de gravar:
+
+```ts
+next_follow_up_date: followUp ? new Date(followUp).toISOString() : null,
+```
+
+Assim "2026-05-28T15:00" (intenção 15:00 BR) vira `"2026-05-28T18:00:00.000Z"` no banco, e o kanban exibe corretamente 28/05 15:00.
+
+## Dados existentes
+A linha errada da Tainara (`15:00 UTC = 12:00 BR`) já está no banco. Duas opções, me diz qual prefere:
+
+a) **Deixar como está** — você reabre o diálogo da Tainara, salva a entrevista de novo com 15:00 e fica corrigido só esse caso.
+b) **Migration de correção** — rodo um UPDATE em `broker_candidate_interactions` somando 3h em todas as `next_follow_up_date` de `interaction_type = 'entrevista'` criadas antes do fix, para alinhar com o fuso de Brasília. Só faz sentido se você tem várias entrevistas com o mesmo problema.
 
 ## Fora de escopo
-- Não mudo o fluxo de criação de entrevista, Google Calendar, fuso horário, nem o formato exibido.
-- Se mais tarde você quiser diferenciar visualmente "entrevista passada" (ex.: cor cinza em vez de azul), faço numa próxima rodada.
+- Não mexo na exibição/filtro do kanban — depois da correção, a entrevista da Tainara (gravada como 18:00 UTC) é futura e o filtro `gte now` já vai mostrar o badge normalmente.
+- Não mexo no fluxo do Google Calendar.
