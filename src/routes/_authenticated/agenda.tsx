@@ -194,32 +194,9 @@ function AgendaPage() {
                   )}
                   {/* eventos */}
                   {dayEvents.map((ev) => (
-                    <Popover key={ev.id}>
-                      <PopoverTrigger asChild>
-                        <button
-                          className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
-                          style={eventStyle(ev)}
-                        >
-                          <div className="font-semibold">{fmtTime(ev.date)}</div>
-                          <div className="truncate">{ev.title}</div>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-72 space-y-2 text-sm">
-                        <div className="text-xs font-medium text-muted-foreground">{labelOf[ev.kind]}</div>
-                        <div className="font-semibold">{ev.title}</div>
-                        <div className="text-xs">{ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</div>
-                        {ev.phone && (
-                          <a href={whatsappUrl(ev.phone)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
-                            <MessageCircle className="size-3" /> {ev.phone}
-                          </a>
-                        )}
-                        {ev.notes && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{ev.notes}</p>}
-                        <Button asChild size="sm" variant="outline" className="w-full">
-                          <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
-                        </Button>
-                      </PopoverContent>
-                    </Popover>
+                    <EventPopover key={ev.id} ev={ev} colorOf={colorOf} labelOf={labelOf} style={eventStyle(ev)} weekStartIso={weekStart.toISOString()} />
                   ))}
+
                 </div>
               );
             })}
