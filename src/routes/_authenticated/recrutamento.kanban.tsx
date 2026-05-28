@@ -187,17 +187,22 @@ function Column({ id, name, color, count, children }: { id: string; name: string
   );
 }
 
-function CandidateCard({ cand, respName }: { cand: Candidate; respName: string | null }) {
+function CandidateCard({ cand, respName, interviewAt }: { cand: Candidate; respName: string | null; interviewAt: string | null }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: cand.id });
   const style = transform ? { transform: `translate(${transform.x}px, ${transform.y}px)` } : undefined;
   const [obsOpen, setObsOpen] = useState(false);
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const interviewFmt = interviewAt
+    ? new Date(interviewAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : null;
   return (
     <Card ref={setNodeRef} style={style} {...attributes} {...listeners} className={`p-3 cursor-grab text-sm ${isDragging ? "opacity-40" : ""}`}>
       <Link to="/recrutamento/$id" params={{ id: cand.id }} onPointerDown={(e) => e.stopPropagation()} className="font-medium hover:underline">{cand.name}</Link>
       <div className="text-xs text-muted-foreground">{cand.phone ?? "Sem telefone"}</div>
       {cand.city && <div className="text-[11px] text-muted-foreground">📍 {cand.city}</div>}
       {respName && <div className="text-[11px] text-muted-foreground">👤 {respName}</div>}
+      {interviewFmt && <div className="text-[11px] font-medium text-primary">📅 Entrevista: {interviewFmt}</div>}
+
       <div className="mt-2 flex flex-wrap gap-1">
         {cand.phone && (
           <a href={whatsappUrl(cand.phone)} target="_blank" rel="noreferrer" onClick={stop} onPointerDown={stop}>
