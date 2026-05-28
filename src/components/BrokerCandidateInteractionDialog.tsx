@@ -77,7 +77,7 @@ export function BrokerCandidateInteractionDialog({
       user_id: user.id,
       interaction_type: type,
       notes: finalNotes || null,
-      next_follow_up_date: followUp || null,
+      next_follow_up_date: followUp ? new Date(followUp).toISOString() : null,
     });
     if (error) {
       setSaving(false);
