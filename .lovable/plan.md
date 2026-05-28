@@ -1,37 +1,43 @@
-# Salvar entrevista no fuso de Brasília (corrigir 15:00 vs 12:00)
+## Agenda — calendário de compromissos
 
-## Causa raiz
-Em `src/components/BrokerCandidateInteractionDialog.tsx`, o input `datetime-local` devolve uma string sem fuso (ex.: `"2026-05-28T15:00"`). O código grava ela direto:
+Nova página `/agenda` (rota autenticada) com visualização **semanal por hora** mostrando entrevistas e follow-ups marcados, visível para todos os usuários autenticados.
 
-```ts
-next_follow_up_date: followUp || null,
-```
+### Item de menu
+Adicionar em `src/components/AppLayout.tsx` no `NAV`:
+- `{ to: "/agenda", label: "Agenda", icon: CalendarDays, roles: ["admin","corretor","recrutador","gerente_recrutamento"] }`
 
-O Postgres interpreta string sem fuso como **UTC**. Resultado:
-- Você marca **15:00** (intenção: 15:00 BR)
-- Banco grava **2026-05-28 15:00:00+00** (15:00 UTC = **12:00 BR**)
-- O kanban filtra `>= now()`. Agora são 12:01 BR → 15:00 UTC já passou → o badge desaparece.
+### Rota
+`src/routes/_authenticated/agenda.tsx`
 
-O Google Calendar funciona porque lá o código usa `new Date(followUp).toISOString()`, que aplica o fuso do navegador corretamente. O bug é só no INSERT no banco.
+### Fontes de dados (todos veem tudo)
+Buscas no client com `supabase`:
+1. **Entrevistas de candidatos** — `broker_candidate_interactions` onde `interaction_type='entrevista'` e `next_follow_up_date` dentro da semana visível. Join com `broker_candidates(id,name,phone)`.
+2. **Follow-ups de candidatos** — `broker_candidate_interactions` onde `interaction_type<>'entrevista'` e `next_follow_up_date` dentro da semana. Join com `broker_candidates`.
+3. **Follow-ups de leads** — `lead_interactions` com `next_follow_up_date` dentro da semana. Join com `leads(id,name,phone)`.
 
-## Correção
+Filtros por intervalo: `.gte("next_follow_up_date", weekStartIso).lt("next_follow_up_date", weekEndIso)`.
 
-**Arquivo: `src/components/BrokerCandidateInteractionDialog.tsx`**
+> Observação RLS: as policies atuais de `broker_candidate_interactions` / `broker_candidates` / `lead_interactions` restringem leitura para recrutador/corretor a registros próprios. "Todos veem tudo" portanto significa: admin/gerente veem tudo de fato; recrutadores e corretores veem só os seus (limitação do RLS atual). Sem mudança de policy nesta entrega.
 
-Trocar a linha do insert para converter o datetime-local em ISO com fuso antes de gravar:
+### UI — visão semanal
+- Cabeçalho: botões `‹ Hoje ›`, label `27 mai – 02 jun 2026`, seletor de visão (Semana padrão; Mês opcional num passo futuro).
+- Grade: 7 colunas (dom–sáb) × linhas de hora (07:00–21:00, slot de 30 min). Linha do "agora" destacada.
+- Eventos posicionados pelo horário, cor por tipo:
+  - Entrevista (candidato) → cor primária
+  - Follow-up candidato → âmbar
+  - Follow-up lead → azul
+- Cada bloco mostra hora + nome. Clique abre um `Popover` com: tipo, nome, telefone com link WhatsApp, link "Abrir" para `/recrutamento/$id` ou `/leads/$id`, notas curtas.
+- Legenda de cores no topo. Vazio: "Nenhum compromisso nesta semana."
+- Mobile: rolagem horizontal da grade.
 
-```ts
-next_follow_up_date: followUp ? new Date(followUp).toISOString() : null,
-```
+### Detalhes técnicos
+- Estado da semana via `useState<Date>` (segunda-feira como início). Helpers de data inline (sem nova dependência).
+- `useQuery` com chave `["agenda", weekStartIso]`.
+- Reaproveitar `formatDate`, `whatsappUrl` de `@/lib/constants`.
+- Sem mudanças em backend, sem migrations.
 
-Assim "2026-05-28T15:00" (intenção 15:00 BR) vira `"2026-05-28T18:00:00.000Z"` no banco, e o kanban exibe corretamente 28/05 15:00.
-
-## Dados existentes
-A linha errada da Tainara (`15:00 UTC = 12:00 BR`) já está no banco. Duas opções, me diz qual prefere:
-
-a) **Deixar como está** — você reabre o diálogo da Tainara, salva a entrevista de novo com 15:00 e fica corrigido só esse caso.
-b) **Migration de correção** — rodo um UPDATE em `broker_candidate_interactions` somando 3h em todas as `next_follow_up_date` de `interaction_type = 'entrevista'` criadas antes do fix, para alinhar com o fuso de Brasília. Só faz sentido se você tem várias entrevistas com o mesmo problema.
-
-## Fora de escopo
-- Não mexo na exibição/filtro do kanban — depois da correção, a entrevista da Tainara (gravada como 18:00 UTC) é futura e o filtro `gte now` já vai mostrar o badge normalmente.
-- Não mexo no fluxo do Google Calendar.
+### Fora do escopo
+- Criar/editar compromissos a partir da agenda (continua pelos diálogos existentes).
+- Sincronização com Google Calendar nesta tela.
+- Visão mensal (pode ser adicionada depois).
+- Ajuste de RLS para permitir recrutador/corretor ver compromissos alheios.

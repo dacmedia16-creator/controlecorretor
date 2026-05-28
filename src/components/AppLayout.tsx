@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload, Shuffle, Layers, Home, Key, UserPlus, Menu } from "lucide-react";
+import { Building2, LayoutDashboard, Users, Trello, Settings, ListChecks, LogOut, Briefcase, Upload, Shuffle, Layers, Home, Key, UserPlus, Menu, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { to: "/recrutamento", label: "Recrutamento", icon: UserPlus, roles: ["admin", "recrutador", "gerente_recrutamento"] },
   { to: "/recrutamento/kanban", label: "Kanban Recrutamento", icon: Trello, roles: ["recrutador", "gerente_recrutamento"] },
   { to: "/corretores", label: "Usuários", icon: Users, roles: ["admin", "gerente_recrutamento"] },
+  { to: "/agenda", label: "Agenda", icon: CalendarDays, roles: ["admin", "corretor", "recrutador", "gerente_recrutamento"] },
   { to: "/configuracoes/kanban", label: "Configurações", icon: Settings, roles: ["admin", "recrutador", "gerente_recrutamento"] },
 ];
 

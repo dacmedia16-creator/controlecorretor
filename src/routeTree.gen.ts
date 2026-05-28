@@ -23,6 +23,7 @@ import { Route as AuthenticatedKanbanRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedDistribuicaoRouteImport } from './routes/_authenticated/distribuicao'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCorretoresRouteImport } from './routes/_authenticated/corretores'
+import { Route as AuthenticatedAgendaRouteImport } from './routes/_authenticated/agenda'
 import { Route as AuthenticatedRecrutamentoIndexRouteImport } from './routes/_authenticated/recrutamento.index'
 import { Route as OauthGoogleCalendarCallbackRouteImport } from './routes/oauth.google-calendar.callback'
 import { Route as AuthenticatedRecrutamentoKanbanRouteImport } from './routes/_authenticated/recrutamento.kanban'
@@ -107,6 +108,11 @@ const AuthenticatedCorretoresRoute = AuthenticatedCorretoresRouteImport.update({
   path: '/corretores',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAgendaRoute = AuthenticatedAgendaRouteImport.update({
+  id: '/agenda',
+  path: '/agenda',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedRecrutamentoIndexRoute =
   AuthenticatedRecrutamentoIndexRouteImport.update({
     id: '/',
@@ -158,6 +164,7 @@ const AuthenticatedConfiguracoesKanbanRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/agenda': typeof AuthenticatedAgendaRoute
   '/corretores': typeof AuthenticatedCorretoresRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/distribuicao': typeof AuthenticatedDistribuicaoRoute
@@ -181,6 +188,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/agenda': typeof AuthenticatedAgendaRoute
   '/corretores': typeof AuthenticatedCorretoresRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/distribuicao': typeof AuthenticatedDistribuicaoRoute
@@ -205,6 +213,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authenticated/agenda': typeof AuthenticatedAgendaRoute
   '/_authenticated/corretores': typeof AuthenticatedCorretoresRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/distribuicao': typeof AuthenticatedDistribuicaoRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/agenda'
     | '/corretores'
     | '/dashboard'
     | '/distribuicao'
@@ -253,6 +263,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/agenda'
     | '/corretores'
     | '/dashboard'
     | '/distribuicao'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/agenda'
     | '/_authenticated/corretores'
     | '/_authenticated/dashboard'
     | '/_authenticated/distribuicao'
@@ -404,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCorretoresRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/agenda': {
+      id: '/_authenticated/agenda'
+      path: '/agenda'
+      fullPath: '/agenda'
+      preLoaderRoute: typeof AuthenticatedAgendaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/recrutamento/': {
       id: '/_authenticated/recrutamento/'
       path: '/'
@@ -511,6 +530,7 @@ const AuthenticatedRecrutamentoRouteWithChildren =
   )
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAgendaRoute: typeof AuthenticatedAgendaRoute
   AuthenticatedCorretoresRoute: typeof AuthenticatedCorretoresRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDistribuicaoRoute: typeof AuthenticatedDistribuicaoRoute
@@ -526,6 +546,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAgendaRoute: AuthenticatedAgendaRoute,
   AuthenticatedCorretoresRoute: AuthenticatedCorretoresRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDistribuicaoRoute: AuthenticatedDistribuicaoRoute,
