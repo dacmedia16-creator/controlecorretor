@@ -49,7 +49,7 @@ function BrokerKanbanPage() {
     queryFn: async () => {
       const nowIso = new Date().toISOString();
       const [cands, statuses, profiles, interviews] = await Promise.all([
-        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,assigned_to_user_id,updated_at").order("updated_at", { ascending: false }),
+        supabase.from("broker_candidates").select("id,name,phone,email,city,status_id,assigned_to_user_id,updated_at,interview_rating").order("updated_at", { ascending: false }),
         supabase.from("kanban_statuses").select("id,name,color,position").eq("kanban_type", "broker_recruitment").eq("active", true).order("position"),
         supabase.from("profiles").select("id,name,email"),
         supabase.from("broker_candidate_interactions")
