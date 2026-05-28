@@ -7,13 +7,17 @@ import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { whatsappUrl } from "@/lib/constants";
-import { MessageCircle, Plus, StickyNote } from "lucide-react";
+import { MessageCircle, Plus, StickyNote, Star } from "lucide-react";
 import { toast } from "sonner";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
 import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateInteractionDialog";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
+
 
 export const Route = createFileRoute("/_authenticated/recrutamento/kanban")({
   component: BrokerKanbanPage,
