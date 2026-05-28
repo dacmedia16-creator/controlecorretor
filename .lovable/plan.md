@@ -1,76 +1,49 @@
-# Integração Google Calendar — cada recrutador conecta o próprio
 
-Quando uma interação do tipo **entrevista** for criada com data/hora, criar automaticamente um evento no Google Calendar do recrutador e convidar o candidato (se tiver e-mail).
+## Objetivo
 
-## 1. Pré-requisito (você faz no Google Cloud Console)
+Quando um recrutador registrar uma interação do tipo **"entrevista"** com data/hora em um candidato, o evento é automaticamente criado no Google Calendar **dele** e o candidato é convidado por e-mail.
 
-1. Criar projeto e habilitar **Google Calendar API**
-2. Tela de consentimento OAuth: adicionar escopos `calendar.events`, `userinfo.email`
-3. Criar credencial **OAuth Client ID** tipo **Web application**
-4. **Authorized redirect URI** (eu te passo a URL exata após criar a rota): `https://controlecorretor.lovable.app/oauth/google-calendar/callback` e a do preview
-5. Copiar **Client ID** e **Client Secret** → colar via tool de secrets (vou pedir)
+Cada recrutador conecta sua **própria** conta Google (OAuth offline com refresh token). Tabela `user_google_calendar_connections` já criada; secrets `GOOGLE_OAUTH_CLIENT_ID` e `GOOGLE_OAUTH_CLIENT_SECRET` já configurados.
 
-Secrets a criar: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
+## O que será implementado
 
-## 2. Banco de dados (migration)
+### 1. Server functions (`src/lib/google-calendar.functions.ts`)
+- `startGoogleCalendarConnect()` — gera URL OAuth do Google (`access_type=offline`, `prompt=consent`, scopes `calendar.events` + `userinfo.email`) com `state` assinado (HMAC com `LOVABLE_API_KEY` + `user_id` + nonce).
+- `getMyGoogleCalendarStatus()` — retorna `{ connected, google_email }` para o usuário atual.
+- `disconnectGoogleCalendar()` — apaga a linha do usuário.
+- `createGoogleCalendarEvent({ candidateId, interactionId, startISO, durationMinutes, summary, description })`:
+  - Carrega tokens do usuário via `supabaseAdmin`.
+  - Se `expires_at` perto de vencer, faz refresh em `oauth2.googleapis.com/token` e atualiza a linha.
+  - Busca o candidato (nome + email) via `supabaseAdmin`.
+  - Faz `POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all` com `start`/`end` em America/Sao_Paulo, `attendees: [{ email: candidato.email }]` (só se houver email).
+  - Retorna `{ eventId, htmlLink }`. Erros não derrubam o fluxo do chamador (try/catch no UI).
 
-Tabela `user_google_calendar_connections`:
-- `user_id uuid PK` (FK lógico para auth.users)
-- `access_token text`, `refresh_token text`, `expires_at timestamptz`
-- `google_email text`
-- `created_at`, `updated_at`
+Todas protegidas por `requireSupabaseAuth`.
 
-RLS: usuário só lê/edita o próprio registro; service_role acesso total (server functions usam admin client para gravar tokens com segurança).
+### 2. Server route do callback OAuth (`src/routes/oauth.google-calendar.callback.tsx`)
+- Server handler `GET`: lê `code` + `state`, valida HMAC do state, troca code por tokens em `oauth2.googleapis.com/token`, busca email em `userinfo`, faz `upsert` na tabela com `supabaseAdmin`, redireciona para `/recrutamento/kanban?gcal=connected`.
+- Componente client mínimo (caso o redirect não dispare) com mensagem.
 
-## 3. Server functions (`src/lib/google-calendar.functions.ts`)
+### 3. UI
+- **Banner em `/recrutamento` e `/recrutamento/kanban`**: quando `getMyGoogleCalendarStatus().connected === false`, mostra card "Conecte seu Google Calendar para sincronizar entrevistas" + botão **Conectar Google Calendar** (chama `startGoogleCalendarConnect` e redireciona). Quando conectado, mostra `Conectado como <email>` + botão **Desconectar**.
+- **Diálogo de interação** (`BrokerCandidateInteractionDialog`): quando `type === "entrevista"` e `next_follow_up_date` preenchido, mostrar:
+  - Campo "Duração (minutos)" (default 30).
+  - Toggle "Adicionar ao Google Calendar e convidar candidato" (default ligado se conectado, desabilitado se não conectado com aviso).
+  - Após salvar a interação, chamar `createGoogleCalendarEvent` em try/catch. Toast de sucesso com link do evento ou toast de erro (sem reverter a interação).
 
-- `startGoogleCalendarConnect()` → gera URL de auth Google com `access_type=offline&prompt=consent&scope=calendar.events+email`, state assinado
-- `getMyGoogleCalendarStatus()` → retorna `{ connected, googleEmail }`
-- `disconnectGoogleCalendar()` → apaga linha
-- `createGoogleCalendarEvent({ summary, description, startISO, durationMin, attendeeEmail })`:
-  - Carrega tokens do user logado
-  - Se `expires_at` próximo → refresh via `https://oauth2.googleapis.com/token`
-  - `POST https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all`
-  - Retorna `htmlLink` do evento
+### 4. URLs de redirect para configurar no Google Cloud Console
+Após o plano ser aprovado, eu confirmo as URLs exatas que você precisa colar em **Authorized redirect URIs** do seu OAuth Client:
+- `https://controlecorretor.lovable.app/oauth/google-calendar/callback`
+- `https://id-preview--6e049608-b16f-4955-a49b-3ad4d482ba57.lovable.app/oauth/google-calendar/callback`
 
-## 4. Rota de callback OAuth
+## Segurança
+- Tokens só são lidos/escritos via server functions usando `supabaseAdmin` (tabela já não tem policies de INSERT/UPDATE — apenas SELECT/DELETE para o dono).
+- `state` assinado com HMAC-SHA256 (`LOVABLE_API_KEY` + user_id + nonce + expires) — previne CSRF.
+- Refresh automático antes de cada chamada.
+- Tokens nunca trafegam para o cliente.
 
-`src/routes/oauth.google-calendar.callback.tsx`:
-- Lê `code` e `state` da query
-- Chama server fn `handleGoogleCalendarCallback({code, state})` que troca code por tokens, salva na tabela, retorna `googleEmail`
-- Redireciona para `/recrutamento` com toast de sucesso
-
-## 5. UI
-
-**Página `/recrutamento`** (e `/recrutamento/kanban`):
-- Banner discreto "Conectar Google Calendar" quando `connected=false`, botão abre `authorizationUrl` em nova aba/redirect
-- Quando conectado, mostra `📅 Calendar conectado: email@gmail.com` + botão "Desconectar"
-
-**`BrokerCandidateInteractionDialog.tsx`** (quando `interaction_type === "entrevista"`):
-- Adicionar campo **Duração (minutos)** com default 30
-- Após salvar a interação no banco, se `next_follow_up_date` existir:
-  - Chamar `createGoogleCalendarEvent` (try/catch, não-bloqueante)
-  - Sucesso → toast "Evento criado no Google Calendar"
-  - Erro de "não conectado" → toast com link para conectar
-  - Outro erro → toast com mensagem
-
-## 6. Segurança
-
-- Tokens só acessados via server functions (admin client)
-- `state` OAuth assinado com `LOVABLE_API_KEY` (HMAC) + user_id + nonce, validado no callback
-- Refresh automático antes de cada chamada à API
-- Nada de token no client
-
-## Detalhes técnicos
-
-- Server functions ficam em `src/lib/` (cliente-safe import path)
-- Usar `supabaseAdmin` em `client.server.ts` para gravar tokens
-- Usar `requireSupabaseAuth` middleware em todas as fns (exceto callback que valida via state)
-- Garantir `attachSupabaseAuth` em `src/start.ts`
-
-## Ordem de execução
-
-1. Migration da tabela (peço aprovação)
-2. Pedir secrets `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET`
-3. Implementar server functions + rota callback + UI
-4. Te dar a URL de redirect exata para colar no Google Cloud Console
+## Ordem de execução (após aprovação)
+1. Criar `google-calendar.functions.ts` + rota de callback.
+2. Adicionar banner de conexão e botão.
+3. Atualizar `BrokerCandidateInteractionDialog` com campo de duração e chamada ao criar evento.
+4. Te passar as URLs para colar no Google Cloud Console.
