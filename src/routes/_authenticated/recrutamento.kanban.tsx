@@ -235,7 +235,7 @@ function BrokerKanbanPage() {
   );
 }
 
-}
+
 
 function Column({ id, name, color, count, children }: { id: string; name: string; color: string; count: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
