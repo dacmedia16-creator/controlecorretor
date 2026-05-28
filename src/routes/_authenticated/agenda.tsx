@@ -291,6 +291,9 @@ function EventPopover({
     }
 
     setSaving(false);
+    qc.invalidateQueries({ queryKey: ["agenda", weekStartIso] });
+  }
+
   async function remove() {
     setDeleting(true);
     const table = ev.id.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
@@ -320,8 +323,6 @@ function EventPopover({
     qc.invalidateQueries({ queryKey: ["agenda", weekStartIso] });
   }
 
-
-  }
 
   return (
     <Popover>
