@@ -182,3 +182,58 @@ export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
     return { updated: true };
   });
 
+
+export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    candidateId: z.string().uuid(),
+    startISO: z.string().min(1),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const accessToken = await getFreshAccessToken(context.userId);
+
+    const { data: cand } = await supabaseAdmin
+      .from("broker_candidates")
+      .select("name")
+      .eq("id", data.candidateId)
+      .maybeSingle();
+    if (!cand) throw new Error("Candidato não encontrado");
+
+    const start = new Date(data.startISO);
+    const timeMin = new Date(start.getTime() - 5 * 60_000).toISOString();
+    const timeMax = new Date(start.getTime() + 5 * 60_000).toISOString();
+
+    const listUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+      new URLSearchParams({
+        q: cand.name,
+        timeMin,
+        timeMax,
+        singleEvents: "true",
+        maxResults: "10",
+      }).toString();
+
+    const listRes = await fetch(listUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!listRes.ok) {
+      const t = await listRes.text();
+      throw new Error(`Google Calendar API ${listRes.status}: ${t}`);
+    }
+    const listed = await listRes.json() as { items?: Array<{ id: string; summary?: string }> };
+    const match = (listed.items ?? []).find((e) => (e.summary ?? "").includes(cand.name));
+    if (!match) return { deleted: false };
+
+    const delRes = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${match.id}?sendUpdates=all`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    if (!delRes.ok && delRes.status !== 410) {
+      const t = await delRes.text();
+      throw new Error(`Google Calendar API ${delRes.status}: ${t}`);
+    }
+    return { deleted: true };
+  });
+

@@ -8,10 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
-import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent } from "@/lib/google-calendar.functions";
+import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/google-calendar.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/agenda")({
   component: AgendaPage,
@@ -228,10 +239,13 @@ function EventPopover({
   const [newDt, setNewDt] = useState(() => toLocalInput(ev.date));
   const [duration, setDuration] = useState(30);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isInterview = ev.kind === "entrevista";
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
+  const removeEvent = useServerFn(deleteGoogleCalendarEvent);
+
   const { data: gcalStatus } = useQuery({
     queryKey: ["gcal-status"],
     queryFn: () => getStatus(),
@@ -280,6 +294,36 @@ function EventPopover({
     qc.invalidateQueries({ queryKey: ["agenda", weekStartIso] });
   }
 
+  async function remove() {
+    setDeleting(true);
+    const table = ev.id.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
+    const rowId = ev.id.replace(/^(bci|li)-/, "");
+    const { error } = await supabase.from(table).delete().eq("id", rowId);
+    if (error) {
+      setDeleting(false);
+      toast.error(error.message);
+      return;
+    }
+    if (isInterview && calendarConnected) {
+      try {
+        const r = await removeEvent({
+          data: { candidateId: ev.link.params.id, startISO: ev.date.toISOString() },
+        });
+        toast.success(r.deleted
+          ? "Compromisso excluído e removido do Google Calendar"
+          : "Excluído no sistema; evento não localizado no Google Calendar");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "erro";
+        toast.error(`Excluído no sistema, mas falhou no Google Calendar: ${msg}`);
+      }
+    } else {
+      toast.success("Compromisso excluído");
+    }
+    setDeleting(false);
+    qc.invalidateQueries({ queryKey: ["agenda", weekStartIso] });
+  }
+
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -326,8 +370,28 @@ function EventPopover({
             <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
           </Button>
         </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="destructive" className="w-full" disabled={deleting}>
+              <Trash2 className="size-3" /> {deleting ? "Excluindo…" : "Excluir compromisso"}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir compromisso?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação removerá o registro de interação{isInterview && calendarConnected ? " e tentará remover o evento do Google Calendar" : ""}. Não é possível desfazer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={remove}>Excluir</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </PopoverContent>
     </Popover>
   );
 }
+
 
