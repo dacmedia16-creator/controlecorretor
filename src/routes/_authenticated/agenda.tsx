@@ -291,7 +291,36 @@ function EventPopover({
     }
 
     setSaving(false);
+  async function remove() {
+    setDeleting(true);
+    const table = ev.id.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
+    const rowId = ev.id.replace(/^(bci|li)-/, "");
+    const { error } = await supabase.from(table).delete().eq("id", rowId);
+    if (error) {
+      setDeleting(false);
+      toast.error(error.message);
+      return;
+    }
+    if (isInterview && calendarConnected) {
+      try {
+        const r = await removeEvent({
+          data: { candidateId: ev.link.params.id, startISO: ev.date.toISOString() },
+        });
+        toast.success(r.deleted
+          ? "Compromisso excluído e removido do Google Calendar"
+          : "Excluído no sistema; evento não localizado no Google Calendar");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "erro";
+        toast.error(`Excluído no sistema, mas falhou no Google Calendar: ${msg}`);
+      }
+    } else {
+      toast.success("Compromisso excluído");
+    }
+    setDeleting(false);
     qc.invalidateQueries({ queryKey: ["agenda", weekStartIso] });
+  }
+
+
   }
 
   return (
