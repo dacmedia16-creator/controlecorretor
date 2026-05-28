@@ -37,14 +37,29 @@ export function BrokerCandidateInteractionDialog({
     if (open) setType(defaultType);
   }, [open, defaultType]);
 
+  const isInterview = type === "entrevista";
+
   async function save() {
     if (!user) return;
+    if (isInterview && !followUp) {
+      toast.error("Informe a data e hora da entrevista");
+      return;
+    }
     setSaving(true);
+    let finalNotes = notes.trim();
+    if (isInterview && followUp) {
+      const formatted = new Date(followUp).toLocaleString("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+      const prefix = `Entrevista agendada para ${formatted}`;
+      finalNotes = finalNotes ? `${prefix}\n${finalNotes}` : prefix;
+    }
     const { error } = await supabase.from("broker_candidate_interactions").insert({
       candidate_id: candidateId,
       user_id: user.id,
       interaction_type: type,
-      notes: notes || null,
+      notes: finalNotes || null,
       next_follow_up_date: followUp || null,
     });
     setSaving(false);
@@ -78,7 +93,7 @@ export function BrokerCandidateInteractionDialog({
             <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
           <div>
-            <Label>Próximo follow-up</Label>
+            <Label>{isInterview ? "Data e hora da entrevista *" : "Próximo follow-up"}</Label>
             <Input type="datetime-local" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
           </div>
         </div>
