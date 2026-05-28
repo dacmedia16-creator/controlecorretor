@@ -31,10 +31,7 @@ type Candidate = {
   interview_rating: number | null;
 };
 
-  status_id: string | null;
-  assigned_to_user_id: string | null;
-  updated_at: string;
-};
+
 
 function BrokerKanbanPage() {
   const { role } = useAuth();
