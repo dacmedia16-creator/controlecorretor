@@ -357,6 +357,10 @@ function EventPopover({
               min={5}
               max={480}
               value={duration}
+              onChange={(e) => setDuration(Math.max(5, Math.min(480, Number(e.target.value) || 30)))}
+            />
+          </div>
+        )}
         <div className="flex gap-2">
           <Button size="sm" onClick={save} disabled={saving} className="flex-1">
             {saving ? "Salvando…" : "Salvar"}
@@ -384,13 +388,9 @@ function EventPopover({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-          <Button asChild size="sm" variant="outline" className="flex-1">
-            <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
-          </Button>
-        </div>
       </PopoverContent>
     </Popover>
   );
 }
+
 
