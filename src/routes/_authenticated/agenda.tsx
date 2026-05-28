@@ -259,13 +259,19 @@ function EventPopover({
     const newIso = new Date(newDt).toISOString();
     const table = ev.id.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
     const rowId = ev.id.replace(/^(bci|li)-/, "");
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from(table)
       .update({ next_follow_up_date: newIso })
-      .eq("id", rowId);
+      .eq("id", rowId)
+      .select("id");
     if (error) {
       setSaving(false);
       toast.error(error.message);
+      return;
+    }
+    if (!updated || updated.length === 0) {
+      setSaving(false);
+      toast.error("Sem permissão para alterar este compromisso.");
       return;
     }
 
