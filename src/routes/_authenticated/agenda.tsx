@@ -357,14 +357,34 @@ function EventPopover({
               min={5}
               max={480}
               value={duration}
-              onChange={(e) => setDuration(Math.max(5, Math.min(480, Number(e.target.value) || 30)))}
-            />
-          </div>
-        )}
         <div className="flex gap-2">
           <Button size="sm" onClick={save} disabled={saving} className="flex-1">
             {saving ? "Salvando…" : "Salvar"}
           </Button>
+          <Button asChild size="sm" variant="outline" className="flex-1">
+            <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+          </Button>
+        </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="destructive" className="w-full" disabled={deleting}>
+              <Trash2 className="size-3" /> {deleting ? "Excluindo…" : "Excluir compromisso"}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir compromisso?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação removerá o registro de interação{isInterview && calendarConnected ? " e tentará remover o evento do Google Calendar" : ""}. Não é possível desfazer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={remove}>Excluir</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
           <Button asChild size="sm" variant="outline" className="flex-1">
             <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
           </Button>
