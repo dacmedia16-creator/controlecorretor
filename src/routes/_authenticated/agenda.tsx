@@ -239,10 +239,13 @@ function EventPopover({
   const [newDt, setNewDt] = useState(() => toLocalInput(ev.date));
   const [duration, setDuration] = useState(30);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isInterview = ev.kind === "entrevista";
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
+  const removeEvent = useServerFn(deleteGoogleCalendarEvent);
+
   const { data: gcalStatus } = useQuery({
     queryKey: ["gcal-status"],
     queryFn: () => getStatus(),
