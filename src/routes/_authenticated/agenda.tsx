@@ -43,7 +43,7 @@ type AgendaEvent = {
 const HOUR_START = 7;
 const HOUR_END = 21;
 const SLOT_MIN = 30;
-const PX_PER_MIN = 1; // 60 min = 60px row
+const PX_PER_MIN = 1.5; // 60 min = 90px row
 
 function startOfWeek(d: Date) {
   const x = new Date(d);

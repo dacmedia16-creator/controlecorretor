@@ -1,65 +1,28 @@
-## Causa raiz
+## Problema
 
-No `EventPopover.save()` em `src/routes/_authenticated/agenda.tsx` chamamos:
+Na grade da Agenda, cada card de compromisso está com altura fixa de ~28px (`30 * PX_PER_MIN - 2`, com `PX_PER_MIN = 1`). Isso corta o conteúdo do card pela metade — o horário aparece inteiro mas o nome do candidato/lead fica cortado (ex.: "Laiane Cásria", "Camila souza" aparecem com a segunda linha cortada).
 
-```ts
-supabase.from(table).update({ next_follow_up_date: newIso }).eq("id", rowId)
-```
+## Causa
 
-Mas as policies RLS atuais dessas tabelas **não cobrem UPDATE** para recrutador / corretor / gerente:
-
-- `broker_candidate_interactions`: tem `admin all`, `recruiter select/insert`, `gerente select/insert`, `owner delete`, `gerente delete` — **nenhuma para UPDATE**.
-- `lead_interactions`: tem `admin all`, `broker select/insert`, `owner delete` — **nenhuma para UPDATE**.
-
-Sem policy de UPDATE, o Postgres não retorna erro: simplesmente filtra 0 linhas. Por isso o `update` "funciona" mas a data não muda. Depois do `invalidateQueries`, a agenda recarrega com o valor antigo.
-
-Admins não veem o problema porque o `... admin all` cobre UPDATE.
-
-## Correção
-
-Migration adicionando policies de UPDATE para o dono da interação (coerente com o que já fizemos para DELETE):
-
-```sql
--- broker_candidate_interactions
-CREATE POLICY "broker_interactions owner update"
-ON public.broker_candidate_interactions
-FOR UPDATE TO authenticated
-USING (user_id = auth.uid())
-WITH CHECK (user_id = auth.uid());
-
-CREATE POLICY "broker_interactions gerente update"
-ON public.broker_candidate_interactions
-FOR UPDATE TO authenticated
-USING (public.has_role(auth.uid(), 'gerente_recrutamento'))
-WITH CHECK (public.has_role(auth.uid(), 'gerente_recrutamento'));
-
--- lead_interactions
-CREATE POLICY "interactions owner update"
-ON public.lead_interactions
-FOR UPDATE TO authenticated
-USING (user_id = auth.uid())
-WITH CHECK (user_id = auth.uid());
-```
-
-## Robustez no cliente (mesma edit)
-
-Em `src/routes/_authenticated/agenda.tsx`, fazer o `update` retornar a linha alterada e tratar "0 linhas" como erro explícito, para não engolir silenciosamente esse tipo de problema no futuro:
+Em `src/routes/_authenticated/agenda.tsx`, a função `eventStyle` define:
 
 ```ts
-const { data: updated, error } = await supabase
-  .from(table)
-  .update({ next_follow_up_date: newIso })
-  .eq("id", rowId)
-  .select("id");
-
-if (error) { toast.error(error.message); return; }
-if (!updated || updated.length === 0) {
-  toast.error("Sem permissão para alterar este compromisso.");
-  return;
-}
+height: `${30 * PX_PER_MIN - 2}px`  // = 28px
 ```
+
+28px não cabe duas linhas de texto (horário + nome) com padding `py-1`.
+
+## Correção proposta
+
+Em `src/routes/_authenticated/agenda.tsx`:
+
+1. Aumentar a densidade vertical da grade: mudar `PX_PER_MIN` de `1` para `1.5` (cada hora vira 90px em vez de 60px), dando mais respiro à coluna de horários.
+2. Em `eventStyle`, garantir altura mínima suficiente para 2 linhas, usando `minHeight: 44px` além da altura calculada (eventos de 30min ainda terão altura proporcional, mas nunca menor que o necessário para mostrar horário + nome completos).
+3. Manter o cálculo proporcional para eventos com duração diferente (futuro), apenas adicionando o piso de altura.
+
+Nenhuma mudança em lógica de dados, RLS, ou Google Calendar. É puramente ajuste visual da grade semanal.
 
 ## Fora do escopo
 
-- Permitir que qualquer usuário (não dono e não gerente) edite interações alheias.
-- Mudar lógica de Google Calendar (que já funciona quando a interação está no escopo do usuário).
+- Mudar layout do popover ou comportamento de edição.
+- Suporte a sobreposição de eventos no mesmo horário (já não trata isso hoje).
