@@ -43,7 +43,7 @@ type AgendaEvent = {
 const HOUR_START = 7;
 const HOUR_END = 21;
 const SLOT_MIN = 30;
-const PX_PER_MIN = 1; // 60 min = 60px row
+const PX_PER_MIN = 1.5; // 60 min = 90px row
 
 function startOfWeek(d: Date) {
   const x = new Date(d);
@@ -131,7 +131,7 @@ function AgendaPage() {
 
   function eventStyle(ev: AgendaEvent) {
     const mins = ev.date.getHours() * 60 + ev.date.getMinutes() - HOUR_START * 60;
-    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px` };
+    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px`, minHeight: "44px" };
   }
 
   const colorOf: Record<EventKind, string> = {
