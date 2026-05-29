@@ -131,7 +131,7 @@ function AgendaPage() {
 
   function eventStyle(ev: AgendaEvent) {
     const mins = ev.date.getHours() * 60 + ev.date.getMinutes() - HOUR_START * 60;
-    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px` };
+    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px`, minHeight: "44px" };
   }
 
   const colorOf: Record<EventKind, string> = {
