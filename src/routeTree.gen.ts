@@ -221,7 +221,6 @@ export interface FileRoutesById {
   '/_authenticated/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/_authenticated/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
   '/_authenticated/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
-  '/_authenticated/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
   '/oauth/google-calendar/callback': typeof OauthGoogleCalendarCallbackRoute
   '/_authenticated/recrutamento/': typeof AuthenticatedRecrutamentoIndexRoute
 }
