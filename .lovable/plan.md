@@ -1,28 +1,24 @@
 ## Problema
 
-Na grade da Agenda, cada card de compromisso está com altura fixa de ~28px (`30 * PX_PER_MIN - 2`, com `PX_PER_MIN = 1`). Isso corta o conteúdo do card pela metade — o horário aparece inteiro mas o nome do candidato/lead fica cortado (ex.: "Laiane Cásria", "Camila souza" aparecem com a segunda linha cortada).
+Ao acessar `/recrutamento/kanban`, o app mostra "Candidato não encontrado" em vez do quadro Kanban.
 
 ## Causa
 
-Em `src/routes/_authenticated/agenda.tsx`, a função `eventStyle` define:
+O arquivo `src/routes/_authenticated/recrutamento.kanban.tsx` existe, mas **não foi registrado** em `src/routeTree.gen.ts`. As únicas rotas filhas de `/recrutamento` listadas hoje são: `index`, `dashboard` e `$id`.
 
-```ts
-height: `${30 * PX_PER_MIN - 2}px`  // = 28px
-```
+Como `kanban` não está na árvore, o roteador casa a URL com a rota dinâmica `recrutamento/$id` (`id = "kanban"`), que busca um candidato com esse ID, não encontra e mostra "Candidato não encontrado".
 
-28px não cabe duas linhas de texto (horário + nome) com padding `py-1`.
+## Correção
 
-## Correção proposta
+Em `src/routeTree.gen.ts`, adicionar a rota `AuthenticatedRecrutamentoKanbanRoute` em todos os pontos análogos aos da `dashboard`:
 
-Em `src/routes/_authenticated/agenda.tsx`:
-
-1. Aumentar a densidade vertical da grade: mudar `PX_PER_MIN` de `1` para `1.5` (cada hora vira 90px em vez de 60px), dando mais respiro à coluna de horários.
-2. Em `eventStyle`, garantir altura mínima suficiente para 2 linhas, usando `minHeight: 44px` além da altura calculada (eventos de 30min ainda terão altura proporcional, mas nunca menor que o necessário para mostrar horário + nome completos).
-3. Manter o cálculo proporcional para eventos com duração diferente (futuro), apenas adicionando o piso de altura.
-
-Nenhuma mudança em lógica de dados, RLS, ou Google Calendar. É puramente ajuste visual da grade semanal.
+1. `import` no topo apontando para `./routes/_authenticated/recrutamento.kanban`.
+2. Declaração `const AuthenticatedRecrutamentoKanbanRoute = AuthenticatedRecrutamentoKanbanRouteImport.update({ id: '/kanban', path: '/kanban', getParentRoute: () => AuthenticatedRecrutamentoRoute })`.
+3. Incluir em `AuthenticatedRecrutamentoRouteChildren` (junto com `dashboard`, `$id`, `index`).
+4. Adicionar nas três interfaces de rota (`FileRoutesByFullPath`, `FileRoutesByTo`, `FileRoutesById`) e nos respectivos union types de `fullPaths`/`to`/`id`.
+5. Registrar no `Register` module com id `'/_authenticated/recrutamento/kanban'`.
 
 ## Fora do escopo
 
-- Mudar layout do popover ou comportamento de edição.
-- Suporte a sobreposição de eventos no mesmo horário (já não trata isso hoje).
+- Não mexer em lógica do Kanban, RLS, dados ou outros componentes — é puramente de roteamento.
+- Não tocar nos outros arquivos da pasta.
