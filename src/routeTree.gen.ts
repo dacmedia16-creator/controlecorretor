@@ -28,6 +28,7 @@ import { Route as AuthenticatedRecrutamentoIndexRouteImport } from './routes/_au
 import { Route as OauthGoogleCalendarCallbackRouteImport } from './routes/oauth.google-calendar.callback'
 import { Route as AuthenticatedRecrutamentoDashboardRouteImport } from './routes/_authenticated/recrutamento.dashboard'
 import { Route as AuthenticatedRecrutamentoIdRouteImport } from './routes/_authenticated/recrutamento.$id'
+import { Route as AuthenticatedRecrutamentoKanbanRouteImport } from './routes/_authenticated/recrutamento.kanban'
 import { Route as AuthenticatedLeadsIdRouteImport } from './routes/_authenticated/leads.$id'
 import { Route as AuthenticatedLeadsEmMassaBatchIdRouteImport } from './routes/_authenticated/leads-em-massa.$batchId'
 import { Route as AuthenticatedConfiguracoesKanbanRouteImport } from './routes/_authenticated/configuracoes.kanban'
