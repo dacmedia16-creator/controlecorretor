@@ -32,6 +32,9 @@ type Candidate = {
 };
 
 
+export const Route = createFileRoute("/_authenticated/recrutamento/kanban")({
+  component: BrokerKanbanPage,
+});
 
 function BrokerKanbanPage() {
   const { role } = useAuth();
