@@ -174,7 +174,6 @@ export interface FileRoutesByFullPath {
   '/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
   '/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
-  '/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
   '/oauth/google-calendar/callback': typeof OauthGoogleCalendarCallbackRoute
   '/recrutamento/': typeof AuthenticatedRecrutamentoIndexRoute
 }
@@ -197,6 +196,7 @@ export interface FileRoutesByTo {
   '/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
   '/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
+  '/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
   '/oauth/google-calendar/callback': typeof OauthGoogleCalendarCallbackRoute
   '/recrutamento': typeof AuthenticatedRecrutamentoIndexRoute
 }
