@@ -136,12 +136,6 @@ const AuthenticatedRecrutamentoIdRoute =
     path: '/$id',
     getParentRoute: () => AuthenticatedRecrutamentoRoute,
   } as any)
-const AuthenticatedRecrutamentoKanbanRoute =
-  AuthenticatedRecrutamentoKanbanRouteImport.update({
-    id: '/kanban',
-    path: '/kanban',
-    getParentRoute: () => AuthenticatedRecrutamentoRoute,
-  } as any)
 const AuthenticatedLeadsIdRoute = AuthenticatedLeadsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -180,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/recrutamento/$id': typeof AuthenticatedRecrutamentoIdRoute
   '/recrutamento/dashboard': typeof AuthenticatedRecrutamentoDashboardRoute
+  '/recrutamento/kanban': typeof AuthenticatedRecrutamentoKanbanRoute
   '/oauth/google-calendar/callback': typeof OauthGoogleCalendarCallbackRoute
   '/recrutamento/': typeof AuthenticatedRecrutamentoIndexRoute
 }
