@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
 import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateInteractionDialog";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
+import { useServerFn } from "@tanstack/react-start";
+import { deleteGoogleCalendarEvent } from "@/lib/google-calendar.functions";
 
 
 type Candidate = {
