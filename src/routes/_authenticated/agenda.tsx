@@ -61,11 +61,29 @@ function fmtDay(d: Date) { return d.toLocaleDateString("pt-BR", { weekday: "shor
 function fmtRange(a: Date, b: Date) {
   return `${a.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} – ${b.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`;
 }
-function fmtTime(d: Date) { return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
+
+type DragPayload = {
+  eventId: string;
+  oldIso: string;
+  kind: EventKind;
+  refId: string;
+  offsetY: number;
+};
 
 function AgendaPage() {
+  const qc = useQueryClient();
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
+  const [dragging, setDragging] = useState<DragPayload | null>(null);
+  const [dropPreview, setDropPreview] = useState<{ dayIso: string; topPx: number } | null>(null);
+
+  const patchEvent = useServerFn(updateGoogleCalendarEvent);
+  const getStatus = useServerFn(getMyGoogleCalendarStatus);
+  const { data: gcalStatus } = useQuery({
+    queryKey: ["gcal-status"],
+    queryFn: () => getStatus(),
+  });
+  const calendarConnected = !!gcalStatus?.connected;
 
   const { data: events = [], isLoading } = useQuery({
     queryKey: ["agenda", weekStart.toISOString()],
@@ -145,12 +163,94 @@ function AgendaPage() {
     followup_lead: "Follow-up lead",
   };
 
+  function snapMinutes(y: number) {
+    const raw = y / PX_PER_MIN;
+    const snapped = Math.round(raw / SLOT_MIN) * SLOT_MIN;
+    return Math.max(0, Math.min(totalMinutes - SLOT_MIN, snapped));
+  }
+
+  function computeDropMinutes(e: React.DragEvent<HTMLDivElement>): number {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetY = dragging?.offsetY ?? 0;
+    const y = e.clientY - rect.top - offsetY;
+    return snapMinutes(y);
+  }
+
+  async function rescheduleEvent(p: { eventId: string; refId: string; oldIso: string; kind: EventKind; newDate: Date; duration?: number }) {
+    const table = p.eventId.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
+    const rowId = p.eventId.replace(/^(bci|li)-/, "");
+    const newIso = p.newDate.toISOString();
+    const { data: updated, error } = await supabase
+      .from(table)
+      .update({ next_follow_up_date: newIso })
+      .eq("id", rowId)
+      .select("id");
+    if (error) {
+      toast.error(error.message);
+      return false;
+    }
+    if (!updated || updated.length === 0) {
+      toast.error("Sem permissão para alterar este compromisso.");
+      return false;
+    }
+    if (p.kind === "entrevista" && calendarConnected) {
+      try {
+        const r = await patchEvent({
+          data: {
+            candidateId: p.refId,
+            oldStartISO: p.oldIso,
+            newStartISO: newIso,
+            durationMinutes: p.duration ?? 30,
+          },
+        });
+        toast.success(r.updated
+          ? "Compromisso atualizado e movido no Google Calendar"
+          : "Atualizado no sistema; evento não localizado no Google Calendar");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "erro";
+        toast.error(`Atualizado no sistema, mas falhou no Google Calendar: ${msg}`);
+      }
+    } else {
+      toast.success("Compromisso reagendado");
+    }
+    qc.invalidateQueries({ queryKey: ["agenda", weekStart.toISOString()] });
+    return true;
+  }
+
+  function onColumnDragOver(e: React.DragEvent<HTMLDivElement>, dayIso: string) {
+    if (!dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const mins = computeDropMinutes(e);
+    setDropPreview({ dayIso, topPx: mins * PX_PER_MIN });
+  }
+
+  async function onColumnDrop(e: React.DragEvent<HTMLDivElement>, day: Date) {
+    if (!dragging) return;
+    e.preventDefault();
+    const mins = computeDropMinutes(e);
+    const newDate = new Date(day);
+    newDate.setHours(0, 0, 0, 0);
+    newDate.setMinutes(HOUR_START * 60 + mins);
+    const payload = dragging;
+    setDragging(null);
+    setDropPreview(null);
+    if (newDate.toISOString() === payload.oldIso) return;
+    await rescheduleEvent({
+      eventId: payload.eventId,
+      refId: payload.refId,
+      oldIso: payload.oldIso,
+      kind: payload.kind,
+      newDate,
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Agenda</h1>
-          <p className="text-sm text-muted-foreground">Compromissos da semana.</p>
+          <p className="text-sm text-muted-foreground">Compromissos da semana. Arraste um card para reagendar.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => setWeekStart(addDays(weekStart, -7))}><ChevronLeft className="size-4" /></Button>
@@ -187,8 +287,17 @@ function AgendaPage() {
             </div>
             {days.map((d) => {
               const dayEvents = events.filter((e) => sameDay(e.date, d));
+              const dayIso = d.toISOString();
+              const preview = dropPreview?.dayIso === dayIso ? dropPreview : null;
               return (
-                <div key={d.toISOString()} className="relative border-l" style={{ height: `${totalMinutes * PX_PER_MIN}px` }}>
+                <div
+                  key={dayIso}
+                  className="relative border-l"
+                  style={{ height: `${totalMinutes * PX_PER_MIN}px` }}
+                  onDragOver={(e) => onColumnDragOver(e, dayIso)}
+                  onDragLeave={() => setDropPreview((p) => (p?.dayIso === dayIso ? null : p))}
+                  onDrop={(e) => onColumnDrop(e, d)}
+                >
                   {/* linhas da grade */}
                   {slots.map((m) => (
                     <div
@@ -203,9 +312,27 @@ function AgendaPage() {
                       <span className="absolute -left-1 -top-1 size-2 rounded-full bg-red-500" />
                     </div>
                   )}
+                  {/* preview de drop */}
+                  {preview && (
+                    <div
+                      className="pointer-events-none absolute inset-x-1 z-30 rounded border-2 border-dashed border-primary bg-primary/10"
+                      style={{ top: `${preview.topPx}px`, height: `${30 * PX_PER_MIN - 2}px` }}
+                    />
+                  )}
                   {/* eventos */}
                   {dayEvents.map((ev) => (
-                    <EventPopover key={ev.id} ev={ev} colorOf={colorOf} labelOf={labelOf} style={eventStyle(ev)} weekStartIso={weekStart.toISOString()} />
+                    <EventPopover
+                      key={ev.id}
+                      ev={ev}
+                      colorOf={colorOf}
+                      labelOf={labelOf}
+                      style={eventStyle(ev)}
+                      weekStartIso={weekStart.toISOString()}
+                      calendarConnected={calendarConnected}
+                      onDragStartCard={(payload) => setDragging(payload)}
+                      onDragEndCard={() => { setDragging(null); setDropPreview(null); }}
+                      isDragging={dragging?.eventId === ev.id}
+                    />
                   ))}
 
                 </div>
@@ -227,13 +354,17 @@ function toLocalInput(d: Date) {
 }
 
 function EventPopover({
-  ev, colorOf, labelOf, style, weekStartIso,
+  ev, colorOf, labelOf, style, weekStartIso, calendarConnected, onDragStartCard, onDragEndCard, isDragging,
 }: {
   ev: AgendaEvent;
   colorOf: Record<EventKind, string>;
   labelOf: Record<EventKind, string>;
   style: React.CSSProperties;
   weekStartIso: string;
+  calendarConnected: boolean;
+  onDragStartCard: (p: DragPayload) => void;
+  onDragEndCard: () => void;
+  isDragging: boolean;
 }) {
   const qc = useQueryClient();
   const [newDt, setNewDt] = useState(() => toLocalInput(ev.date));
@@ -242,16 +373,8 @@ function EventPopover({
   const [deleting, setDeleting] = useState(false);
 
   const isInterview = ev.kind === "entrevista";
-  const getStatus = useServerFn(getMyGoogleCalendarStatus);
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
   const removeEvent = useServerFn(deleteGoogleCalendarEvent);
-
-  const { data: gcalStatus } = useQuery({
-    queryKey: ["gcal-status"],
-    queryFn: () => getStatus(),
-    enabled: isInterview,
-  });
-  const calendarConnected = !!gcalStatus?.connected;
 
   async function save() {
     if (!newDt) return;
@@ -334,8 +457,23 @@ function EventPopover({
     <Popover>
       <PopoverTrigger asChild>
         <button
-          className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
+          className={`absolute left-1 right-1 z-20 cursor-grab overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 active:cursor-grabbing ${colorOf[ev.kind]} ${isDragging ? "opacity-40" : ""}`}
           style={style}
+          draggable
+          onDragStart={(e) => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const offsetY = e.clientY - rect.top;
+            e.dataTransfer.effectAllowed = "move";
+            try { e.dataTransfer.setData("text/plain", ev.id); } catch { /* noop */ }
+            onDragStartCard({
+              eventId: ev.id,
+              oldIso: ev.date.toISOString(),
+              kind: ev.kind,
+              refId: ev.link.params.id,
+              offsetY,
+            });
+          }}
+          onDragEnd={onDragEndCard}
         >
           <div className="font-semibold">{ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
           <div className="truncate">{ev.title}</div>
@@ -399,5 +537,3 @@ function EventPopover({
     </Popover>
   );
 }
-
-

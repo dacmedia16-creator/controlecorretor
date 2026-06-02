@@ -1,45 +1,60 @@
 ## Objetivo
 
-No Kanban de Recrutamento (`/recrutamento/kanban`), quando um candidato for arrastado para a etapa **"Reagendar"**, se houver uma entrevista futura agendada, o sistema deve:
+Permitir mudar data/hora de um compromisso na `/agenda` **arrastando** o card pela grade da semana, com snap de 30 min. Hoje só dá pra mudar pelo popover (campo data/hora).
 
-1. Cancelar automaticamente o evento no Google Calendar do recrutador (notificando o candidato).
-2. Liberar a agenda interna (remover o horário da tela `/agenda`).
-3. Atualizar a etapa do candidato normalmente.
+## Mudança (somente em `src/routes/_authenticated/agenda.tsx`)
 
-## O que já existe
+Usar HTML5 nativo drag-and-drop (sem nova dependência), reutilizando a lógica de save já existente em `EventPopover.save()`.
 
-- `deleteGoogleCalendarEvent` (server fn em `src/lib/google-calendar.functions.ts`) já busca pelo nome do candidato em torno do horário e remove o evento com `sendUpdates=all`.
-- O kanban já carrega `interviewByCand: Map<candidateId, nextFollowUpDateISO>` com a próxima entrevista futura de cada candidato.
-- A agenda (`/agenda`) lê os horários a partir de `broker_candidate_interactions` com `interaction_type='entrevista'` e `next_follow_up_date` no futuro.
+### 1. Tornar o card do evento arrastável
 
-## Mudança (somente em `src/routes/_authenticated/recrutamento.kanban.tsx`)
+No `EventPopover`, o botão do evento ganha:
+- `draggable`
+- `onDragStart`: grava no `dataTransfer` `eventId`, `oldIso`, `kind`, `candidateOrLeadId`, e o `offsetY` do cursor dentro do card (para o evento "grudar" no cursor durante o drop).
+- Visual: leve opacidade durante o drag.
 
-Em `onDragEnd`, depois da checagem de "Entrevista realizada" (que abre o diálogo de nota), adicionar um novo ramo:
+### 2. Coluna do dia vira drop target
+
+Cada `<div>` da coluna do dia em `AgendaPage` ganha:
+- `onDragOver`: `preventDefault()` (necessário para permitir drop) + linha-guia visual mostrando onde vai cair (estado local `dropPreview`).
+- `onDragLeave`: limpa a guia.
+- `onDrop`: calcula o novo horário e dispara o reschedule.
+
+### 3. Cálculo do novo horário
 
 ```text
-se newStatus.name == "reagendar":
-   startISO = data.interviewByCand.get(id)
-   se startISO existe:
-     1. tentar deleteGoogleCalendarEvent({ candidateId: id, startISO })
-        - best effort: erro vira toast de aviso, não bloqueia o fluxo
-     2. UPDATE broker_candidate_interactions
-          SET next_follow_up_date = NULL
-          WHERE candidate_id = id
-            AND interaction_type = 'entrevista'
-            AND next_follow_up_date >= now()
-   atualizar broker_candidates.status_id como já é feito hoje
-   toast: "Movido para Reagendar — agendamento cancelado"
-   invalidar queryKey ["broker-kanban"] e ["agenda"] (para a agenda atualizar)
+rect = column.getBoundingClientRect()
+y = clientY - rect.top - offsetYDentroDoCard
+minutoDoDia = HOUR_START * 60 + round(y / PX_PER_MIN / SLOT_MIN) * SLOT_MIN
+clamp em [HOUR_START*60, HOUR_END*60 - SLOT_MIN]
+newDate = dia da coluna + minutoDoDia
 ```
 
-Detalhes:
-- Importar `deleteGoogleCalendarEvent` e usar via `useServerFn`.
-- Comparação do nome insensível a caixa/acentos (`.toLowerCase().trim() === "reagendar"`), no mesmo padrão já usado para "entrevista realizada".
-- Se não houver entrevista futura, apenas muda a etapa (sem chamadas extras).
-- Se o usuário não tiver Google Calendar conectado, a chamada falha — capturar o erro e mostrar toast informativo, mas seguir com a limpeza da agenda interna e a troca de etapa.
+### 4. Persistência
+
+Extrair de `EventPopover.save()` uma função pura `rescheduleEvent({ eventId, candidateId, oldIso, kind, newIso, duration=30 })` que:
+1. UPDATE em `broker_candidate_interactions` ou `lead_interactions` (pelo prefixo `bci-` / `li-`).
+2. Se for entrevista e Google Calendar conectado → `updateGoogleCalendarEvent`.
+3. Toasts iguais aos de hoje.
+4. Invalida `["agenda", weekStartIso]`.
+
+Essa função fica acessível no `AgendaPage` (level componente) para o handler `onDrop`. O `EventPopover.save()` também passa a chamá-la (sem mudar comportamento).
+
+### 5. Status do Google Calendar no nível da página
+
+Hoje cada `EventPopover` faz seu próprio `useQuery(["gcal-status"])` — já é deduplicado pelo react-query, então mover para o `AgendaPage` mantém o mesmo comportamento e expõe `calendarConnected` ao handler de drop.
+
+### 6. Detalhes de UX
+
+- Cursor `cursor-grab` no card; `cursor-grabbing` enquanto arrasta.
+- Linha tracejada `border-primary` na posição que vai cair (preview), atualizada no `onDragOver`.
+- Se soltar fora de uma coluna válida → não faz nada.
+- Se o novo horário for igual ao atual (mesmo dia/hora após snap) → não dispara update.
+- Mantém o popover (click) para edição fina via input.
 
 ## Fora do escopo
 
-- Não mudar RLS, schema, ou outros componentes.
-- Não tocar na lógica de "Entrevista realizada" (nota) nem em outras etapas.
-- Não criar nova server fn — reaproveitar `deleteGoogleCalendarEvent`.
+- Não muda altura do card por drag (sem resize).
+- Não troca a fonte de dados nem RLS.
+- Não mexe em outras telas (kanban, candidato, lead).
+- Não adiciona biblioteca de drag-and-drop nova.
