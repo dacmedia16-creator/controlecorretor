@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { BrokerCandidateFormDialog } from "@/components/BrokerCandidateFormDialog";
 import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateInteractionDialog";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
+import { useServerFn } from "@tanstack/react-start";
+import { deleteGoogleCalendarEvent } from "@/lib/google-calendar.functions";
 
 
 type Candidate = {
@@ -80,6 +82,8 @@ function BrokerKanbanPage() {
 
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const deleteGcalEvent = useServerFn(deleteGoogleCalendarEvent);
+
   async function onDragEnd(e: DragEndEvent) {
     setActiveId(null);
     if (!e.over || !data) return;
@@ -89,7 +93,9 @@ function BrokerKanbanPage() {
     if (!c || c.status_id === newStatusId) return;
 
     const newStatus = data.statuses.find((s) => s.id === newStatusId);
-    const isInterviewDone = newStatus?.name?.toLowerCase().trim() === "entrevista realizada";
+    const statusName = newStatus?.name?.toLowerCase().trim();
+    const isInterviewDone = statusName === "entrevista realizada";
+    const isReschedule = statusName === "reagendar";
 
     if (isInterviewDone) {
       setRatingValue(c.interview_rating != null ? String(c.interview_rating) : "");
@@ -102,10 +108,30 @@ function BrokerKanbanPage() {
       return { ...old, candidates: old.candidates.map((x: Candidate) => x.id === id ? { ...x, status_id: newStatusId } : x) };
     });
 
+    if (isReschedule) {
+      const startISO = data.interviewByCand.get(id);
+      if (startISO) {
+        try {
+          await deleteGcalEvent({ data: { candidateId: id, startISO } });
+        } catch (err: any) {
+          toast.warning(`Não foi possível cancelar no Google Calendar: ${err?.message ?? "erro"}`);
+        }
+        const { error: clrErr } = await supabase
+          .from("broker_candidate_interactions")
+          .update({ next_follow_up_date: null })
+          .eq("candidate_id", id)
+          .eq("interaction_type", "entrevista")
+          .gte("next_follow_up_date", new Date().toISOString());
+        if (clrErr) toast.error(clrErr.message);
+      }
+    }
+
     const { error } = await supabase.from("broker_candidates").update({ status_id: newStatusId }).eq("id", id);
     if (error) toast.error(error.message);
+    else if (isReschedule) toast.success("Movido para Reagendar — agendamento cancelado");
     else toast.success("Etapa atualizada");
     qc.invalidateQueries({ queryKey });
+    if (isReschedule) qc.invalidateQueries({ queryKey: ["agenda"] });
   }
 
   async function confirmRating() {
