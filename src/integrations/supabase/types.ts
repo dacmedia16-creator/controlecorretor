@@ -496,6 +496,7 @@ export type Database = {
       user_google_calendar_connections: {
         Row: {
           access_token: string
+          calendar_ids: string[]
           created_at: string
           expires_at: string
           google_email: string
@@ -505,6 +506,7 @@ export type Database = {
         }
         Insert: {
           access_token: string
+          calendar_ids?: string[]
           created_at?: string
           expires_at: string
           google_email: string
@@ -514,6 +516,7 @@ export type Database = {
         }
         Update: {
           access_token?: string
+          calendar_ids?: string[]
           created_at?: string
           expires_at?: string
           google_email?: string
