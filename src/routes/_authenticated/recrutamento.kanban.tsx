@@ -19,6 +19,7 @@ import { BrokerCandidateInteractionDialog } from "@/components/BrokerCandidateIn
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { useServerFn } from "@tanstack/react-start";
 import { deleteGoogleCalendarEvent } from "@/lib/google-calendar.functions";
+import { gcalErrorMessage, isGcalReconnectError } from "@/lib/gcal-error";
 
 
 type Candidate = {
