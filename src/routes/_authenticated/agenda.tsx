@@ -30,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/agenda")({
 });
 
 
-type EventKind = "entrevista" | "followup_candidato" | "followup_lead";
+type EventKind = "entrevista" | "followup_candidato" | "followup_lead" | "google";
 type AgendaEvent = {
   id: string;
   kind: EventKind;
@@ -38,7 +38,9 @@ type AgendaEvent = {
   title: string;
   phone: string | null;
   notes: string | null;
-  link: { to: "/recrutamento/$id" | "/leads/$id"; params: { id: string } };
+  link: { to: "/recrutamento/$id" | "/leads/$id"; params: { id: string } } | null;
+  /** eventos vindos do Google (somente leitura) */
+  google?: { accountEmail: string; htmlLink: string | null; allDay: boolean; endISO: string | null };
 };
 
 const HOUR_START = 7;
