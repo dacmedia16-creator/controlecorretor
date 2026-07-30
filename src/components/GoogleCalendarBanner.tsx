@@ -112,6 +112,7 @@ export function GoogleCalendarBanner() {
       <div className="space-y-2">
         {connections.map((c) => <ConnectionCard key={c.id} conn={c} />)}
       </div>
+      <GoogleCalendarDiagnostics />
       {serviceDialog}
     </Card>
 
