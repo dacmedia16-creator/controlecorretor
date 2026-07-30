@@ -56,6 +56,8 @@ export function GoogleCalendarBanner() {
     }
   }, [search.gcal, search.reason, qc, navigate]);
 
+  const [serviceOpen, setServiceOpen] = useState(false);
+
   const connectMut = useMutation({
     mutationFn: async () => {
       const returnPath = typeof window !== "undefined" ? window.location.pathname : undefined;
@@ -68,6 +70,8 @@ export function GoogleCalendarBanner() {
   if (!data) return null;
   const connections = data.connections as ConnectionRow[];
 
+  const serviceDialog = <ServiceCalendarDialog open={serviceOpen} onOpenChange={setServiceOpen} />;
+
   if (connections.length === 0) {
     return (
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3 border-primary/30 bg-primary/5">
@@ -75,9 +79,15 @@ export function GoogleCalendarBanner() {
           <Calendar className="size-4 text-primary" />
           <span>Conecte uma conta Google para sincronizar as entrevistas com o Google Agenda.</span>
         </div>
-        <Button size="sm" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
-          {connectMut.isPending ? "Redirecionando…" : "Conectar Google Calendar"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
+            {connectMut.isPending ? "Redirecionando…" : "Conectar Google Calendar"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setServiceOpen(true)}>
+            <ShieldCheck className="size-4" /> Agenda de serviço
+          </Button>
+        </div>
+        {serviceDialog}
       </Card>
     );
   }
@@ -89,15 +99,22 @@ export function GoogleCalendarBanner() {
           <CheckCircle2 className="size-4 text-green-600" />
           Contas Google conectadas ({connections.length})
         </div>
-        <Button size="sm" variant="outline" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
-          <Plus className="size-4" /> Conectar outra conta
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
+            <Plus className="size-4" /> Conectar outra conta
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setServiceOpen(true)}>
+            <ShieldCheck className="size-4" /> Conectar agenda de serviço
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-2">
         {connections.map((c) => <ConnectionCard key={c.id} conn={c} />)}
       </div>
+      {serviceDialog}
     </Card>
+
   );
 }
 
