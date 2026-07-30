@@ -469,13 +469,25 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
           },
         );
         if (!res.ok) {
-          failures.push(`${conn.google_email}/${calendarId}: ${res.status} ${await res.text()}`);
+          const errText = await res.text();
+          failures.push(`${conn.google_email}/${calendarId}: ${res.status} ${errText}`);
+          await logSync([{
+            user_id: context.userId, connection_id: conn.id, calendar_id: calendarId,
+            google_email: conn.google_email, operation: "create", ok: false,
+            http_status: res.status, error: errText, interaction_id: data.interactionId ?? null,
+          }]);
           continue;
         }
         const created = await res.json() as { id: string; htmlLink: string };
         createdCount++;
         if (canInvite) invited = true;
         if (!first) first = created;
+        targets.push(`${conn.display_name ?? conn.google_email} (${calendarId})`);
+        await logSync([{
+          user_id: context.userId, connection_id: conn.id, calendar_id: calendarId,
+          google_email: conn.google_email, operation: "create", ok: true,
+          http_status: res.status, interaction_id: data.interactionId ?? null,
+        }]);
         if (data.interactionId) {
           tracking.push({
             interaction_id: data.interactionId,
@@ -500,6 +512,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
       htmlLink: first.htmlLink,
       invited,
       calendarsCreated: createdCount,
+      targets,
       failures,
     };
   });
