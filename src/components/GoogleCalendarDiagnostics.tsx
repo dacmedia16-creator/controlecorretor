@@ -1,10 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle2, Loader2, Stethoscope } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { gcalErrorMessage } from "@/lib/gcal-error";
-import { testGoogleCalendarWrite, listGoogleSyncLog } from "@/lib/google-calendar.functions";
+import {
+  testGoogleCalendarWrite,
+  listGoogleSyncLog,
+  listPendingInterviewSync,
+  syncNextPendingInterviewFn,
+} from "@/lib/google-calendar.functions";
 
 const OP_LABEL: Record<string, string> = {
   create: "Criar",
