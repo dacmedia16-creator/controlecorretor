@@ -16,16 +16,24 @@ import {
 
 export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d) => z.object({
+    returnPath: z.string().optional(),
+  }).optional().parse(d ?? undefined))
+  .handler(async ({ data, context }) => {
     const { userId } = context;
     const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
     if (!clientId) throw new Error("GOOGLE_OAUTH_CLIENT_ID não configurado");
     const redirectUri = callbackRedirectUri();
+    const rawReturn = data?.returnPath;
+    const returnPath = rawReturn && rawReturn.startsWith("/") && !rawReturn.startsWith("//")
+      ? rawReturn
+      : undefined;
     const state = signState({
       uid: userId,
       nonce: newNonce(),
       exp: Date.now() + 10 * 60 * 1000,
       redirect: redirectUri,
+      returnPath,
     });
     const params = new URLSearchParams({
       client_id: clientId,

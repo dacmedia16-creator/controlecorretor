@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
 import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent, listGoogleEventsRange } from "@/lib/google-calendar.functions";
+import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { gcalErrorMessage, isGcalReconnectError } from "@/lib/gcal-error";
 import {
   AlertDialog,
@@ -312,6 +313,7 @@ function AgendaPage() {
 
   return (
     <div className="space-y-4">
+      <GoogleCalendarBanner />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Agenda</h1>

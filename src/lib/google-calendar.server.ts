@@ -21,7 +21,7 @@ function signingKey(): string {
   return k;
 }
 
-export function signState(payload: { uid: string; nonce: string; exp: number; redirect: string }): string {
+export function signState(payload: { uid: string; nonce: string; exp: number; redirect: string; returnPath?: string }): string {
   const json = JSON.stringify(payload);
   const b64 = Buffer.from(json).toString("base64url");
   const sig = createHmac("sha256", signingKey()).update(b64).digest("base64url");
@@ -32,7 +32,7 @@ export function newNonce(): string {
   return randomBytes(16).toString("hex");
 }
 
-function verifyState(state: string): { uid: string; redirect: string } {
+function verifyState(state: string): { uid: string; redirect: string; returnPath: string | null } {
   const [b64, sig] = state.split(".");
   if (!b64 || !sig) throw new Error("Invalid state");
   const expected = createHmac("sha256", signingKey()).update(b64).digest("base64url");
@@ -40,10 +40,21 @@ function verifyState(state: string): { uid: string; redirect: string } {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error("Invalid state signature");
   const payload = JSON.parse(Buffer.from(b64, "base64url").toString("utf8")) as {
-    uid: string; nonce: string; exp: number; redirect: string;
+    uid: string; nonce: string; exp: number; redirect: string; returnPath?: string;
   };
   if (Date.now() > payload.exp) throw new Error("State expired");
-  return { uid: payload.uid, redirect: payload.redirect };
+  return { uid: payload.uid, redirect: payload.redirect, returnPath: payload.returnPath ?? null };
+}
+
+/** Caminho interno (same-origin) para onde voltar depois do consentimento. */
+export function stateReturnPath(state: string): string | null {
+  try {
+    const { returnPath } = verifyState(state);
+    if (!returnPath || !returnPath.startsWith("/") || returnPath.startsWith("//")) return null;
+    return returnPath;
+  } catch {
+    return null;
+  }
 }
 
 export async function exchangeCodeAndStore(code: string, state: string): Promise<{ uid: string }> {

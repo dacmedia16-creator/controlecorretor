@@ -43,6 +43,7 @@ export function GoogleCalendarBanner() {
       toast.success("Conta Google conectada!");
       qc.invalidateQueries({ queryKey: ["gcal-connections"] });
       qc.invalidateQueries({ queryKey: ["gcal-status"] });
+      qc.invalidateQueries({ queryKey: ["google-events"] });
       navigate({ to: ".", search: {}, replace: true });
     } else if (search.gcal === "error") {
       toast.error(`Falha ao conectar: ${search.reason ?? "erro desconhecido"}`);
@@ -52,7 +53,8 @@ export function GoogleCalendarBanner() {
 
   const connectMut = useMutation({
     mutationFn: async () => {
-      const { authorizationUrl } = await startConnect();
+      const returnPath = typeof window !== "undefined" ? window.location.pathname : undefined;
+      const { authorizationUrl } = await startConnect({ data: { returnPath } });
       window.location.href = authorizationUrl;
     },
     onError: (e: Error) => toast.error(e.message),
