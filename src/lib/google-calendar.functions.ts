@@ -8,6 +8,7 @@ import {
   signState,
   newNonce,
   listConnections,
+  listRecruitmentConnections,
   getConnection,
   connectionCalendarIds,
   freshTokenFor,
@@ -60,7 +61,7 @@ export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
 export const getMyGoogleCalendarStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const conns = await listConnections(context.userId);
+    const conns = await listRecruitmentConnections(context.userId);
     const writable = conns.filter((c) => c.sync_out);
     const first = writable[0] ?? conns[0] ?? null;
     return {
@@ -273,7 +274,7 @@ export const listGoogleEventsRange = createServerFn({ method: "POST" })
     endISO: z.string().min(1),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const conns = await listConnections(context.userId, { syncIn: true });
+    const conns = await listRecruitmentConnections(context.userId, { syncIn: true });
     const events: Array<{
       id: string;
       accountEmail: string;
@@ -410,7 +411,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     extraNotes: z.string().max(2000).optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const conns = await listConnections(context.userId, { syncOut: true });
+    const conns = await listRecruitmentConnections(context.userId, { syncOut: true });
     if (conns.length === 0) throw new Error("Google Calendar não conectado");
 
     const { data: cand, error: candErr } = await supabaseAdmin
@@ -538,7 +539,7 @@ export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
     durationMinutes: z.number().int().min(5).max(480).default(30),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const conns = await listConnections(context.userId, { syncOut: true });
+    const conns = await listRecruitmentConnections(context.userId, { syncOut: true });
     if (conns.length === 0) throw new Error("Google Calendar não conectado");
 
     const { data: cand } = await supabaseAdmin
@@ -606,7 +607,7 @@ export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
     startISO: z.string().min(1),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const conns = await listConnections(context.userId, { syncOut: true });
+    const conns = await listRecruitmentConnections(context.userId, { syncOut: true });
     if (conns.length === 0) throw new Error("Google Calendar não conectado");
 
     const { data: cand } = await supabaseAdmin

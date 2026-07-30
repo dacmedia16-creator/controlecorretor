@@ -240,6 +240,51 @@ export async function listConnections(
   return (data ?? []) as GcalConnection[];
 }
 
+const RECRUITMENT_CALENDAR_ROLES = new Set(["admin", "gerente_recrutamento", "recrutador"]);
+
+async function recruitmentCalendarRole(userId: string): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.role as string);
+}
+
+/**
+ * Agendas disponíveis para o recrutamento: conexões pessoais do usuário e
+ * agendas de serviço compartilhadas configuradas por um administrador.
+ */
+export async function listRecruitmentConnections(
+  userId: string,
+  filter?: { syncOut?: boolean; syncIn?: boolean },
+): Promise<GcalConnection[]> {
+  const roles = await recruitmentCalendarRole(userId);
+  if (!roles.some((role) => RECRUITMENT_CALENDAR_ROLES.has(role))) return [];
+
+  const own = await listConnections(userId, filter);
+  let sharedQuery = supabaseAdmin
+    .from("user_google_calendar_connections")
+    .select(CONNECTION_COLUMNS)
+    .eq("auth_type", "service_account")
+    .order("created_at", { ascending: true });
+  if (filter?.syncOut) sharedQuery = sharedQuery.eq("sync_out", true);
+  if (filter?.syncIn) sharedQuery = sharedQuery.eq("sync_in", true);
+  const { data, error } = await sharedQuery;
+  if (error) throw new Error(error.message);
+
+  const byId = new Map<string, GcalConnection>();
+  for (const connection of [...own, ...((data ?? []) as GcalConnection[])]) {
+    byId.set(connection.id, connection);
+  }
+  return [...byId.values()];
+}
+
+async function canViewAllRecruitmentInterviews(userId: string): Promise<boolean> {
+  const roles = await recruitmentCalendarRole(userId);
+  return roles.includes("admin") || roles.includes("gerente_recrutamento");
+}
+
 export async function getConnection(userId: string, connectionId: string): Promise<GcalConnection> {
   const { data, error } = await supabaseAdmin
     .from("user_google_calendar_connections")
@@ -447,14 +492,15 @@ export type PendingInterview = {
 
 /** Entrevistas futuras do usuário que ainda não têm evento criado no Google. */
 export async function listPendingInterviews(userId: string, limit = 20): Promise<PendingInterview[]> {
-  const { data: rows, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("broker_candidate_interactions")
     .select("id,candidate_id,notes,next_follow_up_date")
-    .eq("user_id", userId)
     .eq("interaction_type", "entrevista")
     .gte("next_follow_up_date", new Date().toISOString())
     .order("next_follow_up_date", { ascending: true })
     .limit(limit);
+  if (!(await canViewAllRecruitmentInterviews(userId))) query = query.eq("user_id", userId);
+  const { data: rows, error } = await query;
   if (error) throw new Error(error.message);
   const list = (rows ?? []).filter((r) => !!r.next_follow_up_date);
   if (list.length === 0) return [];
@@ -490,7 +536,7 @@ export async function syncNextPendingInterview(userId: string) {
   }
   const next = pending[0];
 
-  const conns = await listConnections(userId, { syncOut: true });
+  const conns = await listRecruitmentConnections(userId, { syncOut: true });
   if (conns.length === 0) throw new Error("Nenhuma agenda com envio ligado — ative \"Enviar compromissos\" em uma agenda com permissão de escrita.");
 
   const { data: cand } = await supabaseAdmin
