@@ -294,14 +294,47 @@ function AgendaPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-xs">
+        <span className="rounded-full bg-muted px-2 py-1 font-medium">
+          {isLoading ? "Carregando…" : `${events.length} compromisso${events.length === 1 ? "" : "s"} nesta semana`}
+        </span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-primary" /> Entrevista</span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-amber-500" /> Follow-up candidato</span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-blue-500" /> Follow-up lead</span>
+        <div className="ml-auto flex items-center gap-1">
+          <Button size="sm" variant={view === "semana" ? "default" : "outline"} onClick={() => setView("semana")}>Semana</Button>
+          <Button size="sm" variant={view === "lista" ? "default" : "outline"} onClick={() => setView("lista")}>Lista</Button>
+        </div>
       </div>
 
-      <Card className="overflow-auto">
+      {view === "lista" ? (
+        <Card className="divide-y">
+          {[...events].sort((a, b) => a.date.getTime() - b.date.getTime()).map((ev) => (
+            <div key={ev.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
+              <span className={`rounded px-2 py-0.5 text-xs ${colorOf[ev.kind]}`}>{labelOf[ev.kind]}</span>
+              <span className="font-medium">
+                {ev.date.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}{" "}
+                {ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+              <span className="truncate">{ev.title}</span>
+              {ev.phone && (
+                <a href={whatsappUrl(ev.phone)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
+                  <MessageCircle className="size-3" /> {ev.phone}
+                </a>
+              )}
+              <Button asChild size="sm" variant="outline" className="ml-auto">
+                <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+              </Button>
+            </div>
+          ))}
+          {!isLoading && events.length === 0 && (
+            <div className="p-6 text-center text-sm text-muted-foreground">Nenhum compromisso nesta semana.</div>
+          )}
+        </Card>
+      ) : (
+      <Card className="overflow-hidden">
+        <div ref={scrollRef} className="max-h-[calc(100vh-260px)] min-h-[420px] overflow-auto">
         <div className="min-w-[900px]">
-          <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b bg-muted/40 text-xs font-medium">
+          <div className="sticky top-0 z-40 grid grid-cols-[60px_repeat(7,1fr)] border-b bg-muted text-xs font-medium">
             <div />
             {days.map((d) => (
               <div key={d.toISOString()} className={`p-2 text-center ${sameDay(d, now) ? "text-primary" : ""}`}>
@@ -314,7 +347,7 @@ function AgendaPage() {
             <div className="relative" style={{ height: `${totalMinutes * PX_PER_MIN}px` }}>
               {slots.filter((m) => m % 60 === 0).map((m) => (
                 <div key={m} className="absolute left-0 right-0 -translate-y-1/2 pr-2 text-right text-[10px] text-muted-foreground" style={{ top: `${m * PX_PER_MIN}px` }}>
-                  {String(HOUR_START + m / 60).padStart(2, "0")}:00
+                  {String(hourStart + m / 60).padStart(2, "0")}:00
                 </div>
               ))}
             </div>
@@ -373,10 +406,12 @@ function AgendaPage() {
             })}
           </div>
         </div>
+        </div>
         {!isLoading && events.length === 0 && (
           <div className="border-t p-6 text-center text-sm text-muted-foreground">Nenhum compromisso nesta semana.</div>
         )}
       </Card>
+      )}
     </div>
   );
 }
