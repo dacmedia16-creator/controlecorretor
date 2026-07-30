@@ -44,7 +44,13 @@ export function ServiceCalendarDialog({
     mutationFn: () =>
       connect({ data: { calendarId: calendarId.trim(), displayName: displayName.trim() || undefined } }),
     onSuccess: (res) => {
-      toast.success(`Agenda "${res.calendarName}" conectada!`);
+      if (res.writable) {
+        toast.success(`Agenda "${res.calendarName}" conectada (leitura e escrita).`);
+      } else {
+        toast.success(
+          `Agenda "${res.calendarName}" conectada em modo somente leitura — os compromissos aparecem aqui, mas eventos criados no sistema não são gravados nela.`,
+        );
+      }
       qc.invalidateQueries({ queryKey: ["gcal-connections"] });
       qc.invalidateQueries({ queryKey: ["gcal-status"] });
       qc.invalidateQueries({ queryKey: ["google-events"] });
