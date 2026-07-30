@@ -661,7 +661,109 @@ export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
     return { deleted: deletedCount > 0, deletedCount, failures };
   });
 
+/** Localiza a conexão (própria ou compartilhada) que o usuário pode operar. */
+async function resolveRawConnection(userId: string, connectionId: string, calendarId: string) {
+  const conns = await listRecruitmentConnections(userId);
+  const conn = conns.find((c) => c.id === connectionId);
+  if (!conn) throw new Error("Agenda do Google não disponível para este usuário");
+  if (!connectionCalendarIds(conn).includes(calendarId)) {
+    throw new Error("Agenda do Google não encontrada nesta conexão");
+  }
+  return conn;
+}
+
+/** Move/redimensiona um evento do Google diretamente (sem interação vinculada). */
+export const patchRawGoogleEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    connectionId: z.string().uuid(),
+    calendarId: z.string().min(1),
+    eventId: z.string().min(1),
+    startISO: z.string().min(1),
+    durationMinutes: z.number().int().min(5).max(1440).default(30),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const conn = await resolveRawConnection(context.userId, data.connectionId, data.calendarId);
+    const accessToken = await freshTokenFor(conn);
+    const start = new Date(data.startISO);
+    const end = new Date(start.getTime() + data.durationMinutes * 60_000);
+
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(data.calendarId)}/events/${encodeURIComponent(data.eventId)}?sendUpdates=none`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          start: { dateTime: start.toISOString(), timeZone: "America/Sao_Paulo" },
+          end: { dateTime: end.toISOString(), timeZone: "America/Sao_Paulo" },
+        }),
+      },
+    );
+    const bodyText = res.ok ? null : (await res.text()).slice(0, 500);
+    await logSync([{
+      user_id: context.userId,
+      connection_id: conn.id,
+      calendar_id: data.calendarId,
+      google_email: conn.google_email,
+      operation: "update",
+      ok: res.ok,
+      http_status: res.status,
+      error: bodyText,
+    }]);
+    if (!res.ok) {
+      if (res.status === 403) {
+        throw new Error("Sem permissão de escrita nesta agenda do Google");
+      }
+      throw new Error(`Google Calendar ${res.status}: ${bodyText ?? "falhou"}`);
+    }
+    return { ok: true };
+  });
+
+/** Exclui um evento do Google diretamente (sem interação vinculada). */
+export const deleteRawGoogleEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    connectionId: z.string().uuid(),
+    calendarId: z.string().min(1),
+    eventId: z.string().min(1),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const conn = await resolveRawConnection(context.userId, data.connectionId, data.calendarId);
+    const accessToken = await freshTokenFor(conn);
+
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(data.calendarId)}/events/${encodeURIComponent(data.eventId)}?sendUpdates=none`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    const gone = res.status === 404 || res.status === 410;
+    const bodyText = res.ok || gone ? null : (await res.text()).slice(0, 500);
+    await logSync([{
+      user_id: context.userId,
+      connection_id: conn.id,
+      calendar_id: data.calendarId,
+      google_email: conn.google_email,
+      operation: "delete",
+      ok: res.ok || gone,
+      http_status: res.status,
+      error: bodyText,
+    }]);
+    if (!res.ok && !gone) {
+      if (res.status === 403) {
+        throw new Error("Sem permissão de escrita nesta agenda do Google");
+      }
+      throw new Error(`Google Calendar ${res.status}: ${bodyText ?? "falhou"}`);
+    }
+    await supabaseAdmin
+      .from("google_calendar_events")
+      .delete()
+      .eq("connection_id", conn.id)
+      .eq("calendar_id", data.calendarId)
+      .eq("google_event_id", data.eventId);
+    return { ok: true, alreadyGone: gone };
+  });
+
 /** Cria um evento de teste em cada agenda com envio ligado e devolve o erro exato do Google. */
+
 export const testGoogleCalendarWrite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ keepEvent: z.boolean().default(false) }).optional().parse(d ?? undefined))
