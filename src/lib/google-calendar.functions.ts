@@ -65,6 +65,8 @@ export const getMyGoogleCalendarStatus = createServerFn({ method: "GET" })
       accountsCount: conns.length,
       google_email: first?.google_email ?? null,
       calendar_ids: first ? connectionCalendarIds(first) : ["primary"],
+      writeTargets: writable.map((c) => c.display_name ?? c.google_email),
+      readOnlyTargets: conns.filter((c) => !c.sync_out).map((c) => c.display_name ?? c.google_email),
     };
   });
 
