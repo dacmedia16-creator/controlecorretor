@@ -562,6 +562,40 @@ function EventPopover({
   }
 
 
+  if (ev.google) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
+            style={style}
+          >
+            <div className="font-semibold">
+              {ev.google.allDay ? "Dia todo" : ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </div>
+            <div className="truncate">{ev.title}</div>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 space-y-2 text-sm">
+          <div>
+            <div className="text-xs font-medium text-muted-foreground">Google Agenda · {ev.google.accountEmail}</div>
+            <div className="font-semibold">{ev.title}</div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: ev.google.allDay ? undefined : "short" })}
+          </div>
+          {ev.notes && <p className="whitespace-pre-wrap text-xs text-muted-foreground">{ev.notes}</p>}
+          <p className="text-xs text-muted-foreground">Evento externo — edite no Google Calendar.</p>
+          {ev.google.htmlLink && (
+            <Button asChild size="sm" variant="outline" className="w-full">
+              <a href={ev.google.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
+            </Button>
+          )}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
   return (
     <Popover>
       <PopoverTrigger asChild>
