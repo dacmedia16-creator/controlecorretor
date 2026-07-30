@@ -781,3 +781,106 @@ function EventPopover({
     </Popover>
   );
 }
+
+function GoogleEventEditor({
+  google, date, defaultDuration,
+}: {
+  google: { connectionId: string; calendarId: string; eventId: string };
+  date: Date;
+  defaultDuration: number;
+}) {
+  const qc = useQueryClient();
+  const patchRaw = useServerFn(patchRawGoogleEvent);
+  const deleteRaw = useServerFn(deleteRawGoogleEvent);
+  const [newDt, setNewDt] = useState(() => toLocalInput(date));
+  const [duration, setDuration] = useState(defaultDuration);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  function refresh() {
+    qc.invalidateQueries({ queryKey: ["google-events"] });
+  }
+
+  async function save() {
+    if (!newDt) return;
+    setSaving(true);
+    try {
+      await patchRaw({
+        data: {
+          connectionId: google.connectionId,
+          calendarId: google.calendarId,
+          eventId: google.eventId,
+          startISO: new Date(newDt).toISOString(),
+          durationMinutes: duration,
+        },
+      });
+      toast.success("Evento atualizado no Google Agenda");
+      refresh();
+    } catch (e) {
+      toast.error(gcalErrorMessage(e, "Não foi possível atualizar no Google"));
+      if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+    }
+    setSaving(false);
+  }
+
+  async function remove() {
+    setDeleting(true);
+    try {
+      const r = await deleteRaw({
+        data: {
+          connectionId: google.connectionId,
+          calendarId: google.calendarId,
+          eventId: google.eventId,
+        },
+      });
+      toast.success(r.alreadyGone ? "Evento já não existia no Google" : "Evento excluído do Google Agenda");
+      refresh();
+    } catch (e) {
+      toast.error(gcalErrorMessage(e, "Não foi possível excluir no Google"));
+      if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+    }
+    setDeleting(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <Label className="text-xs">Data e hora</Label>
+        <Input type="datetime-local" value={newDt} onChange={(e) => setNewDt(e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Duração (min)</Label>
+        <Input
+          type="number"
+          min={5}
+          max={1440}
+          value={duration}
+          onChange={(e) => setDuration(Math.max(5, Math.min(1440, Number(e.target.value) || 30)))}
+        />
+      </div>
+      <Button size="sm" className="w-full" onClick={save} disabled={saving}>
+        {saving ? "Salvando…" : "Salvar no Google"}
+      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button size="sm" variant="destructive" className="w-full" disabled={deleting}>
+            <Trash2 className="size-3" /> {deleting ? "Excluindo…" : "Excluir do Google"}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir evento do Google?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O evento será removido da agenda do Google. Não é possível desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={remove}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
