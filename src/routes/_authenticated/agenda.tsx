@@ -270,10 +270,40 @@ function AgendaPage() {
     return snapMinutes(y);
   }
 
-  async function rescheduleEvent(p: { eventId: string; refId: string; oldIso: string; kind: EventKind; newDate: Date; duration?: number }) {
+  async function rescheduleEvent(p: {
+    eventId: string;
+    refId: string;
+    oldIso: string;
+    kind: EventKind;
+    newDate: Date;
+    duration?: number;
+    google?: { connectionId: string; calendarId: string; eventId: string };
+  }) {
+    if (p.kind === "google") {
+      if (!p.google) return false;
+      try {
+        await patchRaw({
+          data: {
+            connectionId: p.google.connectionId,
+            calendarId: p.google.calendarId,
+            eventId: p.google.eventId,
+            startISO: p.newDate.toISOString(),
+            durationMinutes: p.duration ?? 30,
+          },
+        });
+        toast.success("Evento movido no Google Agenda");
+      } catch (e) {
+        toast.error(gcalErrorMessage(e, "Não foi possível mover o evento no Google"));
+        if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+        return false;
+      }
+      qc.invalidateQueries({ queryKey: ["google-events"] });
+      return true;
+    }
     const table = p.eventId.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
     const rowId = p.eventId.replace(/^(bci|li)-/, "");
     const newIso = p.newDate.toISOString();
+
     const { data: updated, error } = await supabase
       .from(table)
       .update({ next_follow_up_date: newIso })
