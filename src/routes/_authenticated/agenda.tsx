@@ -84,13 +84,38 @@ function AgendaPage() {
 
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
+  const fetchGoogleEvents = useServerFn(listGoogleEventsRange);
   const { data: gcalStatus } = useQuery({
     queryKey: ["gcal-status"],
     queryFn: () => getStatus(),
   });
   const calendarConnected = !!gcalStatus?.connected;
 
-  const { data: events = [], isLoading } = useQuery({
+  const googleQuery = useQuery({
+    queryKey: ["google-events", weekStart.toISOString()],
+    queryFn: () => fetchGoogleEvents({
+      data: { startISO: weekStart.toISOString(), endISO: weekEnd.toISOString() },
+    }),
+    enabled: (gcalStatus?.accountsCount ?? 0) > 0,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const googleEvents = useMemo<AgendaEvent[]>(() => {
+    return (googleQuery.data?.events ?? []).map((e) => ({
+      id: `g-${e.id}`,
+      kind: "google" as const,
+      date: new Date(e.startISO),
+      title: e.title,
+      phone: null,
+      notes: [e.location, e.description].filter(Boolean).join("\n") || null,
+      link: null,
+      google: { accountEmail: e.accountEmail, htmlLink: e.htmlLink, allDay: e.allDay, endISO: e.endISO },
+    }));
+  }, [googleQuery.data]);
+
+  const { data: localEvents = [], isLoading } = useQuery({
+
     queryKey: ["agenda", weekStart.toISOString()],
     queryFn: async () => {
       const startIso = weekStart.toISOString();
