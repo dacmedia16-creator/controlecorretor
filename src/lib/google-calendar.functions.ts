@@ -13,6 +13,9 @@ import {
   freshTokenFor,
   serviceAccountKey,
   serviceAccountToken,
+  logSync,
+  runWriteTest,
+  recentSyncLog,
   type GcalConnection,
 } from "./google-calendar.server";
 
@@ -62,6 +65,8 @@ export const getMyGoogleCalendarStatus = createServerFn({ method: "GET" })
       accountsCount: conns.length,
       google_email: first?.google_email ?? null,
       calendar_ids: first ? connectionCalendarIds(first) : ["primary"],
+      writeTargets: writable.map((c) => c.display_name ?? c.google_email),
+      readOnlyTargets: conns.filter((c) => !c.sync_out).map((c) => c.display_name ?? c.google_email),
     };
   });
 
@@ -434,6 +439,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     let first: { id: string; htmlLink: string } | null = null;
     let createdCount = 0;
     const failures: string[] = [];
+    const targets: string[] = [];
     const tracking: Array<{
       interaction_id: string; connection_id: string; calendar_id: string; google_event_id: string;
     }> = [];
@@ -445,7 +451,12 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
       try {
         accessToken = await freshTokenFor(conn);
       } catch (err) {
-        failures.push(`${conn.google_email}: ${(err as Error).message}`);
+        const msg = (err as Error).message;
+        failures.push(`${conn.google_email}: ${msg}`);
+        await logSync([{
+          user_id: context.userId, connection_id: conn.id, google_email: conn.google_email,
+          operation: "create", ok: false, error: msg, interaction_id: data.interactionId ?? null,
+        }]);
         continue;
       }
       // Contas de serviço não podem convidar participantes sem Domain-Wide
@@ -466,13 +477,25 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
           },
         );
         if (!res.ok) {
-          failures.push(`${conn.google_email}/${calendarId}: ${res.status} ${await res.text()}`);
+          const errText = await res.text();
+          failures.push(`${conn.google_email}/${calendarId}: ${res.status} ${errText}`);
+          await logSync([{
+            user_id: context.userId, connection_id: conn.id, calendar_id: calendarId,
+            google_email: conn.google_email, operation: "create", ok: false,
+            http_status: res.status, error: errText, interaction_id: data.interactionId ?? null,
+          }]);
           continue;
         }
         const created = await res.json() as { id: string; htmlLink: string };
         createdCount++;
         if (canInvite) invited = true;
         if (!first) first = created;
+        targets.push(`${conn.display_name ?? conn.google_email} (${calendarId})`);
+        await logSync([{
+          user_id: context.userId, connection_id: conn.id, calendar_id: calendarId,
+          google_email: conn.google_email, operation: "create", ok: true,
+          http_status: res.status, interaction_id: data.interactionId ?? null,
+        }]);
         if (data.interactionId) {
           tracking.push({
             interaction_id: data.interactionId,
@@ -497,6 +520,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
       htmlLink: first.htmlLink,
       invited,
       calendarsCreated: createdCount,
+      targets,
       failures,
     };
   });
@@ -631,4 +655,22 @@ export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
       throw new Error(`Google Calendar falhou — ${failures.join(" | ")}`);
     }
     return { deleted: deletedCount > 0, deletedCount, failures };
+  });
+
+/** Cria um evento de teste em cada agenda com envio ligado e devolve o erro exato do Google. */
+export const testGoogleCalendarWrite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ keepEvent: z.boolean().default(false) }).optional().parse(d ?? undefined))
+  .handler(async ({ data, context }) => {
+    await assertCanManageServiceCalendar(context.userId);
+    return runWriteTest(context.userId, data?.keepEvent ?? false);
+  });
+
+/** Últimas tentativas de sincronização com o Google Agenda. */
+export const listGoogleSyncLog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ limit: z.number().int().min(1).max(50).default(15) }).optional().parse(d ?? undefined))
+  .handler(async ({ data, context }) => {
+    const entries = await recentSyncLog(context.userId, data?.limit ?? 15);
+    return { entries };
   });

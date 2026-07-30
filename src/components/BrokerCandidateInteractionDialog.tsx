@@ -40,6 +40,7 @@ export function BrokerCandidateInteractionDialog({
   const [followUp, setFollowUp] = useState("");
   const [durationMin, setDurationMin] = useState(30);
   const [addToCalendar, setAddToCalendar] = useState(true);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
@@ -56,6 +57,8 @@ export function BrokerCandidateInteractionDialog({
 
   const isInterview = type === "entrevista";
   const calendarConnected = !!gcalStatus?.connected;
+  const writeTargets = gcalStatus?.writeTargets ?? [];
+  const readOnlyTargets = gcalStatus?.readOnlyTargets ?? [];
 
   async function save() {
     if (!user) return;
@@ -98,25 +101,40 @@ export function BrokerCandidateInteractionDialog({
             extraNotes: notes.trim() || undefined,
           },
         });
-        const base = result.invited
-          ? "Entrevista registrada e candidato convidado no Google Calendar"
-          : `Entrevista criada em ${result.calendarsCreated} agenda(s) do Google`;
+        const where = result.targets.length > 0 ? result.targets.join(", ") : `${result.calendarsCreated} agenda(s)`;
+        const base = `Entrevista criada no Google Agenda: ${where}`;
         if (result.failures.length > 0) {
+          setLastError(result.failures.join(" | "));
           toast.warning(base, { description: `Falhou em: ${result.failures.join(" | ")}` });
-        } else {
-          toast.success(base);
+          setSaving(false);
+          qc.invalidateQueries({ queryKey: ["broker-candidate", candidateId] });
+          qc.invalidateQueries({ queryKey: ["gcal-sync-log"] });
+          return;
         }
+        setLastError(null);
+        toast.success(base);
       } catch (e) {
-        toast.error(gcalErrorMessage(e, "Interação salva, mas falhou no Google Calendar"));
+        const msg = gcalErrorMessage(e, "Interação salva, mas falhou no Google Calendar");
+        setLastError(msg);
+        toast.error(msg);
         if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+        setSaving(false);
+        qc.invalidateQueries({ queryKey: ["broker-candidate", candidateId] });
+        qc.invalidateQueries({ queryKey: ["gcal-sync-log"] });
+        return;
       }
+    } else if (isInterview && followUp && !calendarConnected && gcalStatus?.accountsCount) {
+      toast.warning("Interação registrada — evento NÃO criado no Google", {
+        description: "Nenhuma agenda com permissão de escrita conectada.",
+      });
     } else {
       toast.success("Interação registrada");
     }
 
     setSaving(false);
     qc.invalidateQueries({ queryKey: ["broker-candidate", candidateId] });
-    setNotes(""); setFollowUp("");
+    qc.invalidateQueries({ queryKey: ["gcal-sync-log"] });
+    setNotes(""); setFollowUp(""); setLastError(null);
     onOpenChange(false);
   }
 
@@ -156,21 +174,41 @@ export function BrokerCandidateInteractionDialog({
                   onChange={(e) => setDurationMin(Math.max(5, Math.min(480, Number(e.target.value) || 30)))}
                 />
               </div>
-              <div className="flex items-center justify-between rounded-md border p-3">
-                <div className="text-sm">
-                  <div className="font-medium">Adicionar ao Google Calendar</div>
-                  <div className="text-xs text-muted-foreground">
-                    {calendarConnected
-                      ? "Cria o evento e convida o candidato por e-mail."
-                      : "Conecte seu Google Calendar na página de Recrutamento."}
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <div className="font-medium">Adicionar ao Google Calendar</div>
+                    <div className="text-xs text-muted-foreground">
+                      {calendarConnected
+                        ? "Cria o evento nas agendas com envio ligado."
+                        : gcalStatus?.accountsCount
+                          ? "Nenhuma agenda com permissão de escrita — o evento não será criado no Google."
+                          : "Conecte seu Google Calendar na página Agenda."}
+                    </div>
                   </div>
+                  <Switch
+                    checked={calendarConnected && addToCalendar}
+                    onCheckedChange={setAddToCalendar}
+                    disabled={!calendarConnected}
+                  />
                 </div>
-                <Switch
-                  checked={calendarConnected && addToCalendar}
-                  onCheckedChange={setAddToCalendar}
-                  disabled={!calendarConnected}
-                />
+                {writeTargets.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    Será criado em: <span className="font-medium text-foreground">{writeTargets.join(", ")}</span>
+                  </div>
+                )}
+                {readOnlyTargets.length > 0 && (
+                  <div className="text-xs text-amber-600 dark:text-amber-500">
+                    Somente leitura (não recebe o evento): {readOnlyTargets.join(", ")}
+                  </div>
+                )}
               </div>
+              {lastError && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  <div className="font-medium">Falha no Google Agenda</div>
+                  <div className="break-words">{lastError}</div>
+                </div>
+              )}
             </>
           )}
         </div>

@@ -10,6 +10,7 @@ import { Calendar, CheckCircle2, Loader2, Plus, ShieldCheck } from "lucide-react
 import { toast } from "sonner";
 import { gcalErrorMessage } from "@/lib/gcal-error";
 import { ServiceCalendarDialog } from "@/components/ServiceCalendarDialog";
+import { GoogleCalendarDiagnostics } from "@/components/GoogleCalendarDiagnostics";
 import {
   startGoogleCalendarConnect,
   listMyGoogleConnections,
@@ -112,6 +113,7 @@ export function GoogleCalendarBanner() {
       <div className="space-y-2">
         {connections.map((c) => <ConnectionCard key={c.id} conn={c} />)}
       </div>
+      <GoogleCalendarDiagnostics />
       {serviceDialog}
     </Card>
 

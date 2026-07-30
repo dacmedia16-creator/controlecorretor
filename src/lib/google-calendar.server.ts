@@ -307,3 +307,130 @@ export async function getTargetCalendarIds(userId: string): Promise<string[]> {
   if (conns.length === 0) return ["primary"];
   return connectionCalendarIds(conns[0]);
 }
+
+// ===== Registro de sincronização =====
+
+export type SyncLogEntry = {
+  user_id: string;
+  connection_id?: string | null;
+  calendar_id?: string | null;
+  google_email?: string | null;
+  operation: "create" | "update" | "delete" | "test";
+  ok: boolean;
+  http_status?: number | null;
+  error?: string | null;
+  interaction_id?: string | null;
+};
+
+/** Grava tentativas de sincronização (nunca lança: log não pode quebrar o fluxo). */
+export async function logSync(entries: SyncLogEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  try {
+    await supabaseAdmin.from("google_calendar_sync_log").insert(entries);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Cria (e opcionalmente apaga) um evento de teste em cada agenda com envio ligado. */
+export async function runWriteTest(userId: string, keepEvent: boolean) {
+  const conns = await listConnections(userId, { syncOut: true });
+  const results: Array<{
+    calendarId: string;
+    label: string;
+    ok: boolean;
+    status: number | null;
+    error: string | null;
+    eventId: string | null;
+    htmlLink: string | null;
+  }> = [];
+
+  const start = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 15 * 60_000);
+
+  for (const conn of conns) {
+    let accessToken: string;
+    try {
+      accessToken = await freshTokenFor(conn);
+    } catch (err) {
+      for (const calendarId of connectionCalendarIds(conn)) {
+        results.push({
+          calendarId,
+          label: conn.display_name ?? conn.google_email,
+          ok: false,
+          status: null,
+          error: (err as Error).message,
+          eventId: null,
+          htmlLink: null,
+        });
+      }
+      continue;
+    }
+
+    for (const calendarId of connectionCalendarIds(conn)) {
+      const label = conn.display_name ?? conn.google_email;
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              summary: "Teste de integração — Controle Corretor",
+              description: "Evento de teste criado pelo sistema para validar o envio ao Google Agenda.",
+              start: { dateTime: start.toISOString(), timeZone: "America/Sao_Paulo" },
+              end: { dateTime: end.toISOString(), timeZone: "America/Sao_Paulo" },
+              reminders: { useDefault: false },
+            }),
+          },
+        );
+        if (!res.ok) {
+          const errText = await res.text();
+          results.push({ calendarId, label, ok: false, status: res.status, error: errText, eventId: null, htmlLink: null });
+          await logSync([{
+            user_id: userId, connection_id: conn.id, calendar_id: calendarId,
+            google_email: conn.google_email, operation: "test", ok: false,
+            http_status: res.status, error: errText,
+          }]);
+          continue;
+        }
+        const created = await res.json() as { id: string; htmlLink: string };
+        if (!keepEvent) {
+          await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${created.id}?sendUpdates=none`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+        }
+        results.push({
+          calendarId, label, ok: true, status: res.status, error: null,
+          eventId: created.id, htmlLink: keepEvent ? created.htmlLink : null,
+        });
+        await logSync([{
+          user_id: userId, connection_id: conn.id, calendar_id: calendarId,
+          google_email: conn.google_email, operation: "test", ok: true, http_status: res.status,
+        }]);
+      } catch (err) {
+        const msg = (err as Error).message;
+        results.push({ calendarId, label, ok: false, status: null, error: msg, eventId: null, htmlLink: null });
+        await logSync([{
+          user_id: userId, connection_id: conn.id, calendar_id: calendarId,
+          google_email: conn.google_email, operation: "test", ok: false, error: msg,
+        }]);
+      }
+    }
+  }
+
+  return { writableConnections: conns.length, results, keptEvent: keepEvent };
+}
+
+/** Últimas tentativas de sincronização do usuário. */
+export async function recentSyncLog(userId: string, limit: number) {
+  const { data, error } = await supabaseAdmin
+    .from("google_calendar_sync_log")
+    .select("id,calendar_id,google_email,operation,ok,http_status,error,created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}

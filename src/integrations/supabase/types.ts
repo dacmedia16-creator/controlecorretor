@@ -220,6 +220,48 @@ export type Database = {
           },
         ]
       }
+      google_calendar_sync_log: {
+        Row: {
+          calendar_id: string | null
+          connection_id: string | null
+          created_at: string
+          error: string | null
+          google_email: string | null
+          http_status: number | null
+          id: string
+          interaction_id: string | null
+          ok: boolean
+          operation: string
+          user_id: string
+        }
+        Insert: {
+          calendar_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error?: string | null
+          google_email?: string | null
+          http_status?: number | null
+          id?: string
+          interaction_id?: string | null
+          ok: boolean
+          operation: string
+          user_id: string
+        }
+        Update: {
+          calendar_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          error?: string | null
+          google_email?: string | null
+          http_status?: number | null
+          id?: string
+          interaction_id?: string | null
+          ok?: boolean
+          operation?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       kanban_statuses: {
         Row: {
           active: boolean
