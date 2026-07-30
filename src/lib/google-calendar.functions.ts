@@ -11,6 +11,8 @@ import {
   getConnection,
   connectionCalendarIds,
   freshTokenFor,
+  serviceAccountKey,
+  serviceAccountToken,
   type GcalConnection,
 } from "./google-calendar.server";
 
