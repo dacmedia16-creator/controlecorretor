@@ -619,9 +619,11 @@ function EventPopover({
           <Button size="sm" onClick={save} disabled={saving} className="flex-1">
             {saving ? "Salvando…" : "Salvar"}
           </Button>
-          <Button asChild size="sm" variant="outline" className="flex-1">
-            <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
-          </Button>
+          {ev.link && (
+            <Button asChild size="sm" variant="outline" className="flex-1">
+              <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+            </Button>
+          )}
         </div>
         <AlertDialog>
           <AlertDialogTrigger asChild>
