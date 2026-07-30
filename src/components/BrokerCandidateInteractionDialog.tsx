@@ -156,21 +156,41 @@ export function BrokerCandidateInteractionDialog({
                   onChange={(e) => setDurationMin(Math.max(5, Math.min(480, Number(e.target.value) || 30)))}
                 />
               </div>
-              <div className="flex items-center justify-between rounded-md border p-3">
-                <div className="text-sm">
-                  <div className="font-medium">Adicionar ao Google Calendar</div>
-                  <div className="text-xs text-muted-foreground">
-                    {calendarConnected
-                      ? "Cria o evento e convida o candidato por e-mail."
-                      : "Conecte seu Google Calendar na página de Recrutamento."}
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <div className="font-medium">Adicionar ao Google Calendar</div>
+                    <div className="text-xs text-muted-foreground">
+                      {calendarConnected
+                        ? "Cria o evento nas agendas com envio ligado."
+                        : gcalStatus?.accountsCount
+                          ? "Nenhuma agenda com permissão de escrita — o evento não será criado no Google."
+                          : "Conecte seu Google Calendar na página Agenda."}
+                    </div>
                   </div>
+                  <Switch
+                    checked={calendarConnected && addToCalendar}
+                    onCheckedChange={setAddToCalendar}
+                    disabled={!calendarConnected}
+                  />
                 </div>
-                <Switch
-                  checked={calendarConnected && addToCalendar}
-                  onCheckedChange={setAddToCalendar}
-                  disabled={!calendarConnected}
-                />
+                {writeTargets.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    Será criado em: <span className="font-medium text-foreground">{writeTargets.join(", ")}</span>
+                  </div>
+                )}
+                {readOnlyTargets.length > 0 && (
+                  <div className="text-xs text-amber-600 dark:text-amber-500">
+                    Somente leitura (não recebe o evento): {readOnlyTargets.join(", ")}
+                  </div>
+                )}
               </div>
+              {lastError && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  <div className="font-medium">Falha no Google Agenda</div>
+                  <div className="break-words">{lastError}</div>
+                </div>
+              )}
             </>
           )}
         </div>
