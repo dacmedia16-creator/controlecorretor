@@ -274,7 +274,7 @@ export const listGoogleEventsRange = createServerFn({ method: "POST" })
     endISO: z.string().min(1),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const conns = await listConnections(context.userId, { syncIn: true });
+    const conns = await listRecruitmentConnections(context.userId, { syncIn: true });
     const events: Array<{
       id: string;
       accountEmail: string;
