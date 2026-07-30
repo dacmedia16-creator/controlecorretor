@@ -113,8 +113,9 @@ function BrokerKanbanPage() {
       if (startISO) {
         try {
           await deleteGcalEvent({ data: { candidateId: id, startISO } });
-        } catch (err: any) {
-          toast.warning(`Não foi possível cancelar no Google Calendar: ${err?.message ?? "erro"}`);
+        } catch (err) {
+          toast.warning(gcalErrorMessage(err, "Não foi possível cancelar no Google Calendar"));
+          if (isGcalReconnectError(err)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
         }
         const { error: clrErr } = await supabase
           .from("broker_candidate_interactions")
