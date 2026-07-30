@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ type AgendaEvent = {
 const HOUR_START = 7;
 const HOUR_END = 21;
 const SLOT_MIN = 30;
-const PX_PER_MIN = 1.5; // 60 min = 90px row
+const PX_PER_MIN = 1.2; // 60 min = 72px
 
 function startOfWeek(d: Date) {
   const x = new Date(d);
@@ -77,6 +77,8 @@ function AgendaPage() {
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [dropPreview, setDropPreview] = useState<{ dayIso: string; topPx: number } | null>(null);
+  const [view, setView] = useState<"semana" | "lista">("semana");
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
@@ -142,16 +144,46 @@ function AgendaPage() {
   });
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const totalMinutes = (HOUR_END - HOUR_START) * 60;
-  const slots = Array.from({ length: (HOUR_END - HOUR_START) * (60 / SLOT_MIN) + 1 }, (_, i) => i * SLOT_MIN);
+
+  // amplia a faixa de horas quando existem compromissos fora do padrão
+  const [hourStart, hourEnd] = useMemo(() => {
+    let s = HOUR_START;
+    let e = HOUR_END;
+    for (const ev of events) {
+      s = Math.min(s, ev.date.getHours());
+      e = Math.max(e, ev.date.getHours() + 1);
+    }
+    return [Math.max(0, s), Math.min(24, e)] as const;
+  }, [events]);
+
+  const totalMinutes = (hourEnd - hourStart) * 60;
+  const slots = Array.from({ length: (hourEnd - hourStart) * (60 / SLOT_MIN) + 1 }, (_, i) => i * SLOT_MIN);
   const now = new Date();
   const nowInRange = now >= weekStart && now < weekEnd;
-  const nowTop = nowInRange ? (now.getHours() * 60 + now.getMinutes() - HOUR_START * 60) * PX_PER_MIN : 0;
+  const nowTop = nowInRange ? (now.getHours() * 60 + now.getMinutes() - hourStart * 60) * PX_PER_MIN : 0;
 
   function eventStyle(ev: AgendaEvent) {
-    const mins = ev.date.getHours() * 60 + ev.date.getMinutes() - HOUR_START * 60;
-    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px`, minHeight: "44px" };
+    const mins = ev.date.getHours() * 60 + ev.date.getMinutes() - hourStart * 60;
+    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px`, minHeight: "40px" };
   }
+
+  // rola até o horário atual (ou primeiro compromisso da semana) ao abrir
+  const scrollKey = `${weekStart.toISOString()}-${view}-${events.length}`;
+  const scrolledRef = useRef<string>("");
+  useEffect(() => {
+    if (view !== "semana") return;
+    const el = scrollRef.current;
+    if (!el || scrolledRef.current === scrollKey) return;
+    const target = nowInRange
+      ? now.getHours() * 60 + now.getMinutes()
+      : events.length
+        ? Math.min(...events.map((e) => e.date.getHours() * 60 + e.date.getMinutes()))
+        : hourStart * 60;
+    const top = Math.max(0, (target - hourStart * 60) * PX_PER_MIN - 80);
+    el.scrollTo({ top, behavior: "smooth" });
+    scrolledRef.current = scrollKey;
+  }, [scrollKey, view, nowInRange, events, hourStart]);
+
 
   const colorOf: Record<EventKind, string> = {
     entrevista: "bg-primary text-primary-foreground border-primary",
@@ -232,7 +264,7 @@ function AgendaPage() {
     const mins = computeDropMinutes(e);
     const newDate = new Date(day);
     newDate.setHours(0, 0, 0, 0);
-    newDate.setMinutes(HOUR_START * 60 + mins);
+    newDate.setMinutes(hourStart * 60 + mins);
     const payload = dragging;
     setDragging(null);
     setDropPreview(null);
@@ -262,14 +294,47 @@ function AgendaPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-xs">
+        <span className="rounded-full bg-muted px-2 py-1 font-medium">
+          {isLoading ? "Carregando…" : `${events.length} compromisso${events.length === 1 ? "" : "s"} nesta semana`}
+        </span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-primary" /> Entrevista</span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-amber-500" /> Follow-up candidato</span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-blue-500" /> Follow-up lead</span>
+        <div className="ml-auto flex items-center gap-1">
+          <Button size="sm" variant={view === "semana" ? "default" : "outline"} onClick={() => setView("semana")}>Semana</Button>
+          <Button size="sm" variant={view === "lista" ? "default" : "outline"} onClick={() => setView("lista")}>Lista</Button>
+        </div>
       </div>
 
-      <Card className="overflow-auto">
+      {view === "lista" ? (
+        <Card className="divide-y">
+          {[...events].sort((a, b) => a.date.getTime() - b.date.getTime()).map((ev) => (
+            <div key={ev.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
+              <span className={`rounded px-2 py-0.5 text-xs ${colorOf[ev.kind]}`}>{labelOf[ev.kind]}</span>
+              <span className="font-medium">
+                {ev.date.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}{" "}
+                {ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+              <span className="truncate">{ev.title}</span>
+              {ev.phone && (
+                <a href={whatsappUrl(ev.phone)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
+                  <MessageCircle className="size-3" /> {ev.phone}
+                </a>
+              )}
+              <Button asChild size="sm" variant="outline" className="ml-auto">
+                <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+              </Button>
+            </div>
+          ))}
+          {!isLoading && events.length === 0 && (
+            <div className="p-6 text-center text-sm text-muted-foreground">Nenhum compromisso nesta semana.</div>
+          )}
+        </Card>
+      ) : (
+      <Card className="overflow-hidden">
+        <div ref={scrollRef} className="max-h-[calc(100vh-260px)] min-h-[420px] overflow-auto">
         <div className="min-w-[900px]">
-          <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b bg-muted/40 text-xs font-medium">
+          <div className="sticky top-0 z-40 grid grid-cols-[60px_repeat(7,1fr)] border-b bg-muted text-xs font-medium">
             <div />
             {days.map((d) => (
               <div key={d.toISOString()} className={`p-2 text-center ${sameDay(d, now) ? "text-primary" : ""}`}>
@@ -282,7 +347,7 @@ function AgendaPage() {
             <div className="relative" style={{ height: `${totalMinutes * PX_PER_MIN}px` }}>
               {slots.filter((m) => m % 60 === 0).map((m) => (
                 <div key={m} className="absolute left-0 right-0 -translate-y-1/2 pr-2 text-right text-[10px] text-muted-foreground" style={{ top: `${m * PX_PER_MIN}px` }}>
-                  {String(HOUR_START + m / 60).padStart(2, "0")}:00
+                  {String(hourStart + m / 60).padStart(2, "0")}:00
                 </div>
               ))}
             </div>
@@ -341,10 +406,12 @@ function AgendaPage() {
             })}
           </div>
         </div>
+        </div>
         {!isLoading && events.length === 0 && (
           <div className="border-t p-6 text-center text-sm text-muted-foreground">Nenhum compromisso nesta semana.</div>
         )}
       </Card>
+      )}
     </div>
   );
 }
