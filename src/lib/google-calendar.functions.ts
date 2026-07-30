@@ -105,7 +105,7 @@ export const setConnectionPrefs = createServerFn({ method: "POST" })
     syncIn: z.boolean().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {};
+    const patch: { calendar_ids?: string[]; sync_out?: boolean; sync_in?: boolean } = {};
     if (data.calendarIds) patch.calendar_ids = data.calendarIds.length > 0 ? data.calendarIds : ["primary"];
     if (data.syncOut !== undefined) patch.sync_out = data.syncOut;
     if (data.syncIn !== undefined) patch.sync_in = data.syncIn;
