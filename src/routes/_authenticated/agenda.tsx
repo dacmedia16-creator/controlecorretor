@@ -368,7 +368,10 @@ function AgendaPage() {
       oldIso: payload.oldIso,
       kind: payload.kind,
       newDate,
+      duration: payload.duration,
+      google: payload.google,
     });
+
   }
 
   return (
