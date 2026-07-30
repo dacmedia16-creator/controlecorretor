@@ -79,9 +79,20 @@ export function ServiceCalendarDialog({
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-2">
             <p className="font-medium">Passo 1 — compartilhe a agenda</p>
             <p className="text-muted-foreground text-xs">
-              No Google Agenda: Configurações do calendário → “Compartilhar com pessoas específicas” → adicione
-              o e-mail abaixo com a permissão <strong>Fazer alterações nos eventos</strong>.
+              No Google Agenda: Configurações do calendário → <strong>“Compartilhado com”</strong> → adicione o
+              e-mail abaixo.
             </p>
+            <ul className="text-muted-foreground list-disc pl-4 text-xs space-y-1">
+              <li>
+                Permissão <strong>“Fazer alterações nos eventos”</strong> → sincronização completa (leitura e
+                escrita).
+              </li>
+              <li>
+                Apenas <strong>“Ver todos os detalhes”</strong> (comum quando a empresa restringe o
+                compartilhamento externo) → conecta em modo somente leitura: os compromissos aparecem na Agenda,
+                mas eventos criados aqui não são gravados nela.
+              </li>
+            </ul>
             {infoQuery.isLoading && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="size-3 animate-spin" /> Carregando…
