@@ -511,7 +511,7 @@ function EventPopover({
       try {
         const r = await patchEvent({
           data: {
-            candidateId: ev.link.params.id,
+            candidateId: ev.link!.params.id,
             oldStartISO: ev.date.toISOString(),
             newStartISO: newIso,
             durationMinutes: duration,
@@ -545,7 +545,7 @@ function EventPopover({
     if (isInterview && calendarConnected) {
       try {
         const r = await removeEvent({
-          data: { candidateId: ev.link.params.id, startISO: ev.date.toISOString() },
+          data: { candidateId: ev.link!.params.id, startISO: ev.date.toISOString() },
         });
         toast.success(r.deleted
           ? "Compromisso excluído e removido do Google Calendar"
@@ -578,7 +578,7 @@ function EventPopover({
               eventId: ev.id,
               oldIso: ev.date.toISOString(),
               kind: ev.kind,
-              refId: ev.link.params.id,
+              refId: ev.link!.params.id,
               offsetY,
             });
           }}
