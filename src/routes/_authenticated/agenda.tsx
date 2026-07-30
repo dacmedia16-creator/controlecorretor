@@ -219,11 +219,13 @@ function AgendaPage() {
     entrevista: "bg-primary text-primary-foreground border-primary",
     followup_candidato: "bg-amber-500 text-white border-amber-600",
     followup_lead: "bg-blue-500 text-white border-blue-600",
+    google: "bg-slate-600 text-white border-slate-700",
   };
   const labelOf: Record<EventKind, string> = {
     entrevista: "Entrevista",
     followup_candidato: "Follow-up candidato",
     followup_lead: "Follow-up lead",
+    google: "Google Agenda",
   };
 
   function snapMinutes(y: number) {
