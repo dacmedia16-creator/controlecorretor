@@ -57,6 +57,8 @@ export function BrokerCandidateInteractionDialog({
 
   const isInterview = type === "entrevista";
   const calendarConnected = !!gcalStatus?.connected;
+  const writeTargets = gcalStatus?.writeTargets ?? [];
+  const readOnlyTargets = gcalStatus?.readOnlyTargets ?? [];
 
   async function save() {
     if (!user) return;
