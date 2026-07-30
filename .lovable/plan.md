@@ -1,37 +1,31 @@
-## Diagnóstico confirmado
+## Por que hoje não deixa
 
-O envio está sendo bloqueado por uma incompatibilidade de usuário:
+Os cards em azul escuro não são compromissos do sistema — são o espelho **somente leitura** dos eventos lidos das agendas do Google conectadas. Na Agenda eles são marcados como tipo `google`: não são arrastáveis, não abrem o painel de edição e mostram "Evento externo — edite no Google Calendar". Isso vale para qualquer perfil (não é uma restrição específica da Nicole). As funções existentes de alterar/excluir no Google (`updateGoogleCalendarEvent`, `deleteGoogleCalendarEvent`) só funcionam para eventos criados a partir de uma interação do sistema.
 
-- A agenda **Denis Souza** está conectada ao usuário administrador `dacmedia16@gmail.com`, com envio e recebimento ativos.
-- As 6 entrevistas futuras pertencem à recrutadora `nicole@gmail.com`.
-- O código atual busca **entrevistas e conexão Google pelo mesmo usuário logado**.
-- Assim, o administrador encontra a agenda, mas nenhuma entrevista pendente; a recrutadora encontra as entrevistas, mas nenhuma agenda de envio.
-- O teste técnico da agenda retornou sucesso, porém não criou evento real e não estava ligado a nenhuma entrevista. Não há registros em `google_calendar_events` e não houve tentativas de criação nos logs.
+## O que será feito
 
-## Implementação
+1. **Novas ações diretas no Google**
+   - Criar duas funções de servidor: alterar horário/duração e excluir um evento pelo par (conexão da agenda + id do evento no Google), sem depender de existir interação vinculada.
+   - Usar as mesmas conexões de recrutamento já compartilhadas, respeitando o token de OAuth ou da conta de serviço.
+   - Só permitir a operação se a agenda tiver permissão de escrita (`owner`/`writer`); em agenda somente leitura, retornar mensagem clara vinda do próprio Google.
+   - Registrar cada tentativa (sucesso ou erro) no log de sincronização já existente.
 
-1. **Transformar a agenda de serviço em agenda compartilhada do recrutamento**
-   - Manter agendas OAuth pessoais vinculadas ao próprio usuário.
-   - Permitir que administradores, gerentes de recrutamento e recrutadores autorizados usem a conexão de conta de serviço “Denis Souza” para enviar entrevistas.
-   - Centralizar essa resolução em uma função segura no servidor, sem expor credenciais.
+2. **Agenda: card do Google passa a ser editável**
+   - Tornar o card azul escuro arrastável, com o mesmo encaixe de 30 min usado nos demais.
+   - No popover do evento do Google, adicionar campos de data/hora e duração, botão "Salvar" e botão "Excluir compromisso" com confirmação.
+   - Manter o link "Abrir no Google".
+   - Após salvar/excluir, recarregar os eventos do Google na semana.
 
-2. **Corrigir o envio ao criar uma entrevista**
-   - Ao salvar uma entrevista por qualquer recrutador, localizar a agenda compartilhada com `sync_out` ativo.
-   - Criar o evento no Google e registrar o vínculo em `google_calendar_events`.
-   - Persistir sucesso ou erro real em `google_calendar_sync_log`.
+3. **Segurança e permissões**
+   - As ações continuam exigindo usuário autenticado; recrutador, gerente e admin podem operar as agendas compartilhadas de recrutamento, igual à regra já usada no envio.
+   - Se o evento no Google já não existir (404), tratar como excluído e apenas atualizar a tela.
+   - Se a agenda for somente leitura, desabilitar os botões e explicar o motivo no popover.
 
-3. **Corrigir “Sincronizar agora”**
-   - Recrutador: processar as próprias entrevistas pendentes.
-   - Gerente/admin: processar entrevistas pendentes de toda a equipe.
-   - Usar a agenda compartilhada Denis Souza mesmo quando ela estiver cadastrada por outro administrador.
-   - Mostrar candidato, horário, agenda de destino e eventual mensagem exata do Google.
+4. **Validação**
+   - Mover um evento do Google pela Agenda e conferir a mudança no Google.
+   - Excluir um evento e conferir o sumiço nos dois lados.
+   - Conferir que os compromissos do sistema continuam funcionando como antes.
 
-4. **Evitar duplicações**
-   - Antes de criar, conferir o rastreamento por interação, conexão e agenda.
-   - Não reenviar entrevistas que já tenham evento confirmado.
-   - Se uma tentativa falhar, manter a entrevista como pendente para nova sincronização.
+## Observação técnica
 
-5. **Validar ponta a ponta**
-   - Reenviar uma das entrevistas futuras já existentes.
-   - Confirmar resposta de criação do Google, ID do evento salvo e log de sucesso.
-   - Conferir que o evento aparece na agenda `dacmedia16@gmail.com` e que o contador de pendências diminui.
+Alterações previstas em `src/lib/google-calendar.functions.ts` (novas server functions `patchRawGoogleEvent` / `deleteRawGoogleEvent`), possivelmente auxiliares em `src/lib/google-calendar.server.ts`, e em `src/routes/_authenticated/agenda.tsx` (drag + popover de edição para `kind: "google"`). Nenhuma mudança de banco é necessária.

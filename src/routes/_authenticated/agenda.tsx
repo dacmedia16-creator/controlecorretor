@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronLeft, ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
-import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent, listGoogleEventsRange } from "@/lib/google-calendar.functions";
+import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent, listGoogleEventsRange, patchRawGoogleEvent, deleteRawGoogleEvent } from "@/lib/google-calendar.functions";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { gcalErrorMessage, isGcalReconnectError } from "@/lib/gcal-error";
 import {
@@ -40,8 +40,17 @@ type AgendaEvent = {
   phone: string | null;
   notes: string | null;
   link: { to: "/recrutamento/$id" | "/leads/$id"; params: { id: string } } | null;
-  /** eventos vindos do Google (somente leitura) */
-  google?: { accountEmail: string; htmlLink: string | null; allDay: boolean; endISO: string | null };
+  /** eventos vindos do Google (editáveis diretamente na agenda) */
+  google?: {
+    accountEmail: string;
+    htmlLink: string | null;
+    allDay: boolean;
+    endISO: string | null;
+    connectionId: string;
+    calendarId: string;
+    eventId: string;
+  };
+
 };
 
 const HOUR_START = 7;
@@ -72,7 +81,10 @@ type DragPayload = {
   kind: EventKind;
   refId: string;
   offsetY: number;
+  duration?: number;
+  google?: { connectionId: string; calendarId: string; eventId: string };
 };
+
 
 function AgendaPage() {
   const qc = useQueryClient();
@@ -84,6 +96,8 @@ function AgendaPage() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
+  const patchRaw = useServerFn(patchRawGoogleEvent);
+
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
   const fetchGoogleEvents = useServerFn(listGoogleEventsRange);
   const { data: gcalStatus } = useQuery({
@@ -103,17 +117,33 @@ function AgendaPage() {
   });
 
   const googleEvents = useMemo<AgendaEvent[]>(() => {
-    return (googleQuery.data?.events ?? []).map((e) => ({
-      id: `g-${e.id}`,
-      kind: "google" as const,
-      date: new Date(e.startISO),
-      title: e.title,
-      phone: null,
-      notes: [e.location, e.description].filter(Boolean).join("\n") || null,
-      link: null,
-      google: { accountEmail: e.accountEmail, htmlLink: e.htmlLink, allDay: e.allDay, endISO: e.endISO },
-    }));
+    return (googleQuery.data?.events ?? []).map((e) => {
+      // id vem como `${connectionId}:${calendarId}:${googleEventId}`
+      const first = e.id.indexOf(":");
+      const last = e.id.lastIndexOf(":");
+      const connectionId = first > 0 ? e.id.slice(0, first) : "";
+      const eventId = last > first ? e.id.slice(last + 1) : "";
+      return {
+        id: `g-${e.id}`,
+        kind: "google" as const,
+        date: new Date(e.startISO),
+        title: e.title,
+        phone: null,
+        notes: [e.location, e.description].filter(Boolean).join("\n") || null,
+        link: null,
+        google: {
+          accountEmail: e.accountEmail,
+          htmlLink: e.htmlLink,
+          allDay: e.allDay,
+          endISO: e.endISO,
+          connectionId,
+          calendarId: e.calendarId,
+          eventId,
+        },
+      };
+    });
   }, [googleQuery.data]);
+
 
   const { data: localEvents = [], isLoading } = useQuery({
 
@@ -242,10 +272,40 @@ function AgendaPage() {
     return snapMinutes(y);
   }
 
-  async function rescheduleEvent(p: { eventId: string; refId: string; oldIso: string; kind: EventKind; newDate: Date; duration?: number }) {
+  async function rescheduleEvent(p: {
+    eventId: string;
+    refId: string;
+    oldIso: string;
+    kind: EventKind;
+    newDate: Date;
+    duration?: number;
+    google?: { connectionId: string; calendarId: string; eventId: string };
+  }) {
+    if (p.kind === "google") {
+      if (!p.google) return false;
+      try {
+        await patchRaw({
+          data: {
+            connectionId: p.google.connectionId,
+            calendarId: p.google.calendarId,
+            eventId: p.google.eventId,
+            startISO: p.newDate.toISOString(),
+            durationMinutes: p.duration ?? 30,
+          },
+        });
+        toast.success("Evento movido no Google Agenda");
+      } catch (e) {
+        toast.error(gcalErrorMessage(e, "Não foi possível mover o evento no Google"));
+        if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+        return false;
+      }
+      qc.invalidateQueries({ queryKey: ["google-events"] });
+      return true;
+    }
     const table = p.eventId.startsWith("bci-") ? "broker_candidate_interactions" : "lead_interactions";
     const rowId = p.eventId.replace(/^(bci|li)-/, "");
     const newIso = p.newDate.toISOString();
+
     const { data: updated, error } = await supabase
       .from(table)
       .update({ next_follow_up_date: newIso })
@@ -308,7 +368,10 @@ function AgendaPage() {
       oldIso: payload.oldIso,
       kind: payload.kind,
       newDate,
+      duration: payload.duration,
+      google: payload.google,
     });
+
   }
 
   return (
@@ -565,38 +628,72 @@ function EventPopover({
 
 
   if (ev.google) {
+    const g = ev.google;
+    const canEdit = !!g.connectionId && !!g.eventId && !g.allDay;
+    const defaultDuration = g.endISO
+      ? Math.max(5, Math.min(1440, Math.round((new Date(g.endISO).getTime() - ev.date.getTime()) / 60_000)))
+      : 30;
+
     return (
       <Popover>
         <PopoverTrigger asChild>
           <button
-            className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
+            className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${canEdit ? "cursor-grab active:cursor-grabbing" : ""} ${colorOf[ev.kind]} ${isDragging ? "opacity-40" : ""}`}
             style={style}
+            draggable={canEdit}
+            onDragStart={(e) => {
+              if (!canEdit) return;
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              e.dataTransfer.effectAllowed = "move";
+              try { e.dataTransfer.setData("text/plain", ev.id); } catch { /* noop */ }
+              onDragStartCard({
+                eventId: ev.id,
+                oldIso: ev.date.toISOString(),
+                kind: ev.kind,
+                refId: g.eventId,
+                offsetY: e.clientY - rect.top,
+                duration: defaultDuration,
+                google: { connectionId: g.connectionId, calendarId: g.calendarId, eventId: g.eventId },
+              });
+            }}
+            onDragEnd={onDragEndCard}
           >
             <div className="font-semibold">
-              {ev.google.allDay ? "Dia todo" : ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              {g.allDay ? "Dia todo" : ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </div>
             <div className="truncate">{ev.title}</div>
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-80 space-y-2 text-sm">
           <div>
-            <div className="text-xs font-medium text-muted-foreground">Google Agenda · {ev.google.accountEmail}</div>
+            <div className="text-xs font-medium text-muted-foreground">Google Agenda · {g.accountEmail}</div>
             <div className="font-semibold">{ev.title}</div>
           </div>
           <div className="text-xs text-muted-foreground">
-            {ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: ev.google.allDay ? undefined : "short" })}
+            {ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: g.allDay ? undefined : "short" })}
           </div>
           {ev.notes && <p className="whitespace-pre-wrap text-xs text-muted-foreground">{ev.notes}</p>}
-          <p className="text-xs text-muted-foreground">Evento externo — edite no Google Calendar.</p>
-          {ev.google.htmlLink && (
+          {canEdit ? (
+            <GoogleEventEditor
+              google={{ connectionId: g.connectionId, calendarId: g.calendarId, eventId: g.eventId }}
+              date={ev.date}
+              defaultDuration={defaultDuration}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Evento de dia inteiro — edite direto no Google Calendar.
+            </p>
+          )}
+          {g.htmlLink && (
             <Button asChild size="sm" variant="outline" className="w-full">
-              <a href={ev.google.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
+              <a href={g.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
             </Button>
           )}
         </PopoverContent>
       </Popover>
     );
   }
+
 
   return (
     <Popover>
@@ -684,3 +781,106 @@ function EventPopover({
     </Popover>
   );
 }
+
+function GoogleEventEditor({
+  google, date, defaultDuration,
+}: {
+  google: { connectionId: string; calendarId: string; eventId: string };
+  date: Date;
+  defaultDuration: number;
+}) {
+  const qc = useQueryClient();
+  const patchRaw = useServerFn(patchRawGoogleEvent);
+  const deleteRaw = useServerFn(deleteRawGoogleEvent);
+  const [newDt, setNewDt] = useState(() => toLocalInput(date));
+  const [duration, setDuration] = useState(defaultDuration);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  function refresh() {
+    qc.invalidateQueries({ queryKey: ["google-events"] });
+  }
+
+  async function save() {
+    if (!newDt) return;
+    setSaving(true);
+    try {
+      await patchRaw({
+        data: {
+          connectionId: google.connectionId,
+          calendarId: google.calendarId,
+          eventId: google.eventId,
+          startISO: new Date(newDt).toISOString(),
+          durationMinutes: duration,
+        },
+      });
+      toast.success("Evento atualizado no Google Agenda");
+      refresh();
+    } catch (e) {
+      toast.error(gcalErrorMessage(e, "Não foi possível atualizar no Google"));
+      if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+    }
+    setSaving(false);
+  }
+
+  async function remove() {
+    setDeleting(true);
+    try {
+      const r = await deleteRaw({
+        data: {
+          connectionId: google.connectionId,
+          calendarId: google.calendarId,
+          eventId: google.eventId,
+        },
+      });
+      toast.success(r.alreadyGone ? "Evento já não existia no Google" : "Evento excluído do Google Agenda");
+      refresh();
+    } catch (e) {
+      toast.error(gcalErrorMessage(e, "Não foi possível excluir no Google"));
+      if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+    }
+    setDeleting(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <Label className="text-xs">Data e hora</Label>
+        <Input type="datetime-local" value={newDt} onChange={(e) => setNewDt(e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Duração (min)</Label>
+        <Input
+          type="number"
+          min={5}
+          max={1440}
+          value={duration}
+          onChange={(e) => setDuration(Math.max(5, Math.min(1440, Number(e.target.value) || 30)))}
+        />
+      </div>
+      <Button size="sm" className="w-full" onClick={save} disabled={saving}>
+        {saving ? "Salvando…" : "Salvar no Google"}
+      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button size="sm" variant="destructive" className="w-full" disabled={deleting}>
+            <Trash2 className="size-3" /> {deleting ? "Excluindo…" : "Excluir do Google"}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir evento do Google?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O evento será removido da agenda do Google. Não é possível desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={remove}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
