@@ -137,19 +137,22 @@ export const connectServiceCalendar = createServerFn({ method: "POST" })
     // Descobre o nível de acesso: "writer"/"owner" permitem criar eventos;
     // "reader"/"freeBusyReader" só permitem leitura (comum em organizações
     // que restringem o compartilhamento externo de agendas).
+    // A listagem de eventos retorna accessRole mesmo para contas de serviço
+    // (o endpoint calendarList responde 404 porque a agenda não é "assinada").
     let writable = false;
     try {
-      const listRes = await fetch(
-        `https://www.googleapis.com/calendar/v3/users/me/calendarList/${encodeURIComponent(cal.id)}`,
+      const roleRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?maxResults=1`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      if (listRes.ok) {
-        const entry = await listRes.json() as { accessRole?: string };
-        writable = entry.accessRole === "writer" || entry.accessRole === "owner";
+      if (roleRes.ok) {
+        const body = await roleRes.json() as { accessRole?: string };
+        writable = body.accessRole === "writer" || body.accessRole === "owner";
       }
     } catch {
       writable = false;
     }
+
 
     const { error } = await supabaseAdmin
       .from("user_google_calendar_connections")
