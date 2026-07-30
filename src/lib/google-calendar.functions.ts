@@ -158,6 +158,17 @@ export const listMyGoogleCalendars = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const conn = await getConnection(context.userId, data.connectionId);
     const accessToken = await freshTokenFor(conn);
+    // Conta de serviço não tem "calendarList": mostramos o(s) calendário(s) compartilhado(s).
+    if (conn.auth_type === "service_account") {
+      return {
+        calendars: connectionCalendarIds(conn).map((id) => ({
+          id,
+          name: conn.display_name ?? id,
+          primary: false,
+        })),
+      };
+    }
+
     const res = await fetch(
       "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer&maxResults=100",
       { headers: { Authorization: `Bearer ${accessToken}` } },
