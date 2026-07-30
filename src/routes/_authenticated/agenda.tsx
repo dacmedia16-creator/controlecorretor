@@ -628,38 +628,72 @@ function EventPopover({
 
 
   if (ev.google) {
+    const g = ev.google;
+    const canEdit = !!g.connectionId && !!g.eventId && !g.allDay;
+    const defaultDuration = g.endISO
+      ? Math.max(5, Math.min(1440, Math.round((new Date(g.endISO).getTime() - ev.date.getTime()) / 60_000)))
+      : 30;
+
     return (
       <Popover>
         <PopoverTrigger asChild>
           <button
-            className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
+            className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${canEdit ? "cursor-grab active:cursor-grabbing" : ""} ${colorOf[ev.kind]} ${isDragging ? "opacity-40" : ""}`}
             style={style}
+            draggable={canEdit}
+            onDragStart={(e) => {
+              if (!canEdit) return;
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              e.dataTransfer.effectAllowed = "move";
+              try { e.dataTransfer.setData("text/plain", ev.id); } catch { /* noop */ }
+              onDragStartCard({
+                eventId: ev.id,
+                oldIso: ev.date.toISOString(),
+                kind: ev.kind,
+                refId: g.eventId,
+                offsetY: e.clientY - rect.top,
+                duration: defaultDuration,
+                google: { connectionId: g.connectionId, calendarId: g.calendarId, eventId: g.eventId },
+              });
+            }}
+            onDragEnd={onDragEndCard}
           >
             <div className="font-semibold">
-              {ev.google.allDay ? "Dia todo" : ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              {g.allDay ? "Dia todo" : ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </div>
             <div className="truncate">{ev.title}</div>
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-80 space-y-2 text-sm">
           <div>
-            <div className="text-xs font-medium text-muted-foreground">Google Agenda · {ev.google.accountEmail}</div>
+            <div className="text-xs font-medium text-muted-foreground">Google Agenda · {g.accountEmail}</div>
             <div className="font-semibold">{ev.title}</div>
           </div>
           <div className="text-xs text-muted-foreground">
-            {ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: ev.google.allDay ? undefined : "short" })}
+            {ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: g.allDay ? undefined : "short" })}
           </div>
           {ev.notes && <p className="whitespace-pre-wrap text-xs text-muted-foreground">{ev.notes}</p>}
-          <p className="text-xs text-muted-foreground">Evento externo — edite no Google Calendar.</p>
-          {ev.google.htmlLink && (
+          {canEdit ? (
+            <GoogleEventEditor
+              google={{ connectionId: g.connectionId, calendarId: g.calendarId, eventId: g.eventId }}
+              date={ev.date}
+              defaultDuration={defaultDuration}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Evento de dia inteiro — edite direto no Google Calendar.
+            </p>
+          )}
+          {g.htmlLink && (
             <Button asChild size="sm" variant="outline" className="w-full">
-              <a href={ev.google.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
+              <a href={g.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
             </Button>
           )}
         </PopoverContent>
       </Popover>
     );
   }
+
 
   return (
     <Popover>
