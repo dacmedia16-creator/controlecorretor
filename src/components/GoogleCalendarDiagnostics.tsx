@@ -22,6 +22,8 @@ export function GoogleCalendarDiagnostics() {
   const qc = useQueryClient();
   const runTest = useServerFn(testGoogleCalendarWrite);
   const loadLog = useServerFn(listGoogleSyncLog);
+  const loadPending = useServerFn(listPendingInterviewSync);
+  const syncNext = useServerFn(syncNextPendingInterviewFn);
 
   const logQuery = useQuery({
     queryKey: ["gcal-sync-log"],
