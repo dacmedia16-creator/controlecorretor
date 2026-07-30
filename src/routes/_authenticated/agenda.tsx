@@ -81,7 +81,10 @@ type DragPayload = {
   kind: EventKind;
   refId: string;
   offsetY: number;
+  duration?: number;
+  google?: { connectionId: string; calendarId: string; eventId: string };
 };
+
 
 function AgendaPage() {
   const qc = useQueryClient();
