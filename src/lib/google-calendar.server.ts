@@ -142,3 +142,13 @@ export async function getFreshAccessToken(userId: string): Promise<string> {
     .eq("user_id", userId);
   return refreshed.access_token;
 }
+
+export async function getTargetCalendarIds(userId: string): Promise<string[]> {
+  const { data } = await supabaseAdmin
+    .from("user_google_calendar_connections")
+    .select("calendar_ids")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const ids = (data?.calendar_ids ?? []).filter(Boolean);
+  return ids.length > 0 ? ids : ["primary"];
+}

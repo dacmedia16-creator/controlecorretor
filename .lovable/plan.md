@@ -1,34 +1,36 @@
-## Situação verificada
+## Situação atual (verificada no código)
 
-- As requisições da tela `/agenda` retornam **9 entrevistas** entre 27/07 e 02/08 (dados confirmados no banco e nas respostas de rede do navegador).
-- Os candidatos vinculados (nome/telefone) também são retornados corretamente.
-- Ou seja: **não é falta de dados nem bloqueio de permissão**. O problema está na exibição da grade.
+- A conexão com o Google é por usuário (tabela `user_google_calendar_connections`, com e-mail, tokens e validade).
+- Todas as operações (criar, remover, reagendar entrevista) usam **fixamente** o calendário `primary` da conta conectada — o código chama `.../calendars/primary/events` em `src/lib/google-calendar.functions.ts`.
+- Hoje não existe nenhuma forma de escolher outro calendário.
 
-Causa provável (ainda não confirmada): a grade da semana tem ~1260px de altura e sua janela mostra ~640px, então boa parte dos horários fica fora da área visível; combinado com o container de rolagem do quadro, os cards podem estar "escondidos" abaixo. Não vou assumir isso como certo — o primeiro passo é confirmar.
+## O que será feito
 
-## Passos
+Você poderá escolher **quais calendários da sua conta Google recebem as entrevistas** — o principal e/ou um segundo (por exemplo, "Recrutamento" ou a agenda da equipe).
 
-1. **Confirmar o sintoma na tela**
-   - Abrir a Agenda em modo automatizado (mesmo tamanho de tela que você usa), capturar a tela e contar quantos cards existem no DOM e em que posição estão.
-   - Isso separa dois cenários: (a) cards existem mas estão fora da área visível; (b) cards não são criados por um erro de renderização.
+1. **Escolha de calendários na tela de Recrutamento**
+   - No card do Google Calendar (onde hoje aparece "Conectado como ..."), listar todos os calendários em que você tem permissão de escrever.
+   - Caixas de seleção para marcar um ou mais calendários de destino. Sem escolha, continua usando o principal.
+   - Salvar a seleção por usuário.
 
-2. **Se for visibilidade (cenário mais provável)**
-   - Dar altura fixa ao quadro com rolagem interna própria, em vez de esticar a página inteira.
-   - Rolar automaticamente para o horário atual (ou para o primeiro compromisso do dia) ao abrir a tela.
-   - Comprimir a escala vertical (hora mais baixa) para caber mais horas na tela, mantendo os cards legíveis.
-   - Ajustar a faixa de horas exibida para começar no primeiro compromisso da semana quando houver algo antes das 07:00.
+2. **Criar entrevista**
+   - O evento passa a ser criado em cada calendário selecionado (convite ao candidato enviado apenas uma vez, pelo calendário principal da seleção, para o candidato não receber e-mails duplicados).
 
-3. **Se for erro de renderização**
-   - Corrigir o ponto exato encontrado no passo 1 (ex.: cálculo de posição, filtro de dia, fuso).
+3. **Reagendar e excluir**
+   - Ao arrastar na Agenda ou mover para "Reagendar", o evento é atualizado/removido em **todos** os calendários selecionados, mantendo tudo em sincronia.
+   - Se um calendário falhar, os outros continuam e a mensagem indica exatamente qual falhou.
 
-4. **Reforços de usabilidade (independente da causa)**
-   - Mostrar um contador "X compromissos nesta semana" no topo, para nunca dar a impressão de agenda vazia.
-   - Adicionar uma alternância **Semana / Lista**, onde a Lista exibe todos os compromissos da semana em ordem cronológica — útil no celular e como garantia de que nada some.
-
-5. **Validação final**
-   - Reabrir a Agenda, conferir visualmente que as entrevistas de 27, 29, 30 e 31/07 aparecem nos dias e horários corretos (horário de Brasília) e que arrastar continua funcionando.
+4. **Mensagens e estados**
+   - Loading enquanto a lista de calendários carrega, aviso claro se a conexão expirou (reaproveita o fluxo de reconexão já existente).
 
 ## Detalhes técnicos
 
-- Arquivo principal: `src/routes/_authenticated/agenda.tsx` (constantes `HOUR_START`, `HOUR_END`, `PX_PER_MIN`, função `eventStyle`, container `Card`).
-- Nenhuma alteração de banco de dados, RLS ou integração com Google Calendar é necessária.
+- Banco: nova coluna `calendar_ids text[]` (padrão `{primary}`) em `user_google_calendar_connections`.
+- Novas server functions: `listMyGoogleCalendars` (GET em `/calendar/v3/users/me/calendarList`, filtrando `accessRole` writer/owner) e `setMyGoogleCalendars`.
+- `createGoogleCalendarEvent`, `updateGoogleCalendarEvent` e `deleteGoogleCalendarEvent` passam a iterar sobre os calendários salvos em vez do literal `primary`.
+- Não é necessário alterar escopos OAuth: `calendar.events` já cobre a listagem básica de calendários; se a API recusar, incluo `calendar.readonly` e você refaz a conexão uma vez.
+- UI alterada: `src/components/GoogleCalendarBanner.tsx`.
+
+## Sobre a chave enviada
+
+O arquivo de conta de serviço enviado **não será usado** — você vai revogá-lo e gerar outro. A integração continua pelo login OAuth de cada usuário, que é o modelo correto aqui (o evento aparece na agenda pessoal de quem agendou). Recomendo revogar essa chave no Google Cloud hoje.
