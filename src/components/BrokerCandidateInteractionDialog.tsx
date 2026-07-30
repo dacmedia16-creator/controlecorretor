@@ -101,25 +101,40 @@ export function BrokerCandidateInteractionDialog({
             extraNotes: notes.trim() || undefined,
           },
         });
-        const base = result.invited
-          ? "Entrevista registrada e candidato convidado no Google Calendar"
-          : `Entrevista criada em ${result.calendarsCreated} agenda(s) do Google`;
+        const where = result.targets.length > 0 ? result.targets.join(", ") : `${result.calendarsCreated} agenda(s)`;
+        const base = `Entrevista criada no Google Agenda: ${where}`;
         if (result.failures.length > 0) {
+          setLastError(result.failures.join(" | "));
           toast.warning(base, { description: `Falhou em: ${result.failures.join(" | ")}` });
-        } else {
-          toast.success(base);
+          setSaving(false);
+          qc.invalidateQueries({ queryKey: ["broker-candidate", candidateId] });
+          qc.invalidateQueries({ queryKey: ["gcal-sync-log"] });
+          return;
         }
+        setLastError(null);
+        toast.success(base);
       } catch (e) {
-        toast.error(gcalErrorMessage(e, "Interação salva, mas falhou no Google Calendar"));
+        const msg = gcalErrorMessage(e, "Interação salva, mas falhou no Google Calendar");
+        setLastError(msg);
+        toast.error(msg);
         if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
+        setSaving(false);
+        qc.invalidateQueries({ queryKey: ["broker-candidate", candidateId] });
+        qc.invalidateQueries({ queryKey: ["gcal-sync-log"] });
+        return;
       }
+    } else if (isInterview && followUp && !calendarConnected && gcalStatus?.accountsCount) {
+      toast.warning("Interação registrada — evento NÃO criado no Google", {
+        description: "Nenhuma agenda com permissão de escrita conectada.",
+      });
     } else {
       toast.success("Interação registrada");
     }
 
     setSaving(false);
     qc.invalidateQueries({ queryKey: ["broker-candidate", candidateId] });
-    setNotes(""); setFollowUp("");
+    qc.invalidateQueries({ queryKey: ["gcal-sync-log"] });
+    setNotes(""); setFollowUp(""); setLastError(null);
     onOpenChange(false);
   }
 
