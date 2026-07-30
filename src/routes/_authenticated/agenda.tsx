@@ -77,6 +77,8 @@ function AgendaPage() {
   const weekEnd = useMemo(() => addDays(weekStart, 7), [weekStart]);
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [dropPreview, setDropPreview] = useState<{ dayIso: string; topPx: number } | null>(null);
+  const [view, setView] = useState<"semana" | "lista">("semana");
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
