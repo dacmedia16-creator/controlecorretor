@@ -52,7 +52,8 @@ export function GoogleCalendarBanner() {
 
   const connectMut = useMutation({
     mutationFn: async () => {
-      const { authorizationUrl } = await startConnect();
+      const returnPath = typeof window !== "undefined" ? window.location.pathname : undefined;
+      const { authorizationUrl } = await startConnect({ data: { returnPath } });
       window.location.href = authorizationUrl;
     },
     onError: (e: Error) => toast.error(e.message),
