@@ -169,6 +169,11 @@ function ConnectionCard({ conn }: { conn: ConnectionRow }) {
               <ShieldCheck className="size-3" /> Conta de serviço · {conn.google_email}
             </div>
           )}
+          {!conn.sync_out && (
+            <div className="text-[11px] text-amber-600 dark:text-amber-500">
+              Somente leitura — eventos criados no sistema não vão para esta agenda
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 gap-2">
