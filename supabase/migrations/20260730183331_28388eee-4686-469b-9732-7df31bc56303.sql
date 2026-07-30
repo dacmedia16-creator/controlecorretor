@@ -1,0 +1,1 @@
+UPDATE public.user_google_calendar_connections SET sync_out = false WHERE auth_type = 'service_account' AND google_email = 'denissouza@remax.com.br';

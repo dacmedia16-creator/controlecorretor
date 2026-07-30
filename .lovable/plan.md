@@ -1,32 +1,26 @@
-## Objetivo
+## Diagnóstico (verificado agora)
 
-Testar a conexão da agenda RE/MAX (`denissouza@remax.com.br`) via conta de serviço, em modo somente leitura, e confirmar que os eventos aparecem na tela Agenda.
+Existem duas agendas conectadas, ambas por **conta de serviço**:
 
-## Passos
+| Agenda | Acesso real da conta de serviço | `sync_out` salvo |
+|---|---|---|
+| `dacmedia16@gmail.com` ("Denis Souza") | **owner** (pode escrever) | true |
+| `denissouza@remax.com.br` ("REMAX") | **reader** (só leitura) | true (incorreto) |
 
-1. **Verificar a conta de serviço**
-   - Confirmar que o segredo `GOOGLE_SERVICE_ACCOUNT_JSON` está presente e que o token RS256 é emitido com sucesso (`serviceAccountToken()` em `src/lib/google-calendar.server.ts`).
+A tabela `google_calendar_events` está **vazia** — nenhum evento criado pelo app foi gravado no Google até agora.
 
-2. **Testar acesso ao calendário**
-   - Chamar a API do Google para `calendars/denissouza@remax.com.br` e `users/me/calendarList/...` usando o token da conta de serviço.
-   - Resultados esperados:
-     - `200` + `accessRole: "reader"` → conexão somente leitura (esperado).
-     - `404/403` → o compartilhamento no Google ainda não propagou ou o ID está errado.
+Causa provável (não confirmada por escrita, pois exigiria criar evento real): ao agendar uma entrevista o app envia **convidados (`attendees`) e `sendUpdates`**. O Google **bloqueia contas de serviço que tentam convidar participantes sem Domain-Wide Delegation** (403 `forbiddenForServiceAccounts`), então a criação falha nas duas agendas. Além disso, a agenda RE/MAX está marcada como gravável, o que gera 403 adicional.
 
-3. **Executar a conexão real**
-   - Rodar `connectServiceCalendar` para gravar a conexão com `sync_in: true`, `sync_out: false`.
+## O que fazer
 
-4. **Validar na Agenda**
-   - Abrir `/agenda` no preview autenticado e confirmar:
-     - a conexão "RE/MAX" aparece no banner com o aviso de somente leitura;
-     - eventos do Google da agenda RE/MAX são listados na semana atual;
-     - nenhuma tentativa de escrita é feita nessa conexão (erros 403 não devem ocorrer).
+1. **Confirmar a causa**: criar um evento de teste via servidor nas duas agendas (com e sem `attendees`) e ler o erro exato do Google. O diagnóstico acima orienta a correção, mas o fix final segue o erro real.
+2. **Ajustar a criação/edição/exclusão de eventos** em `src/lib/google-calendar.functions.ts`:
+   - Para conexões `auth_type = "service_account"`: não enviar `attendees` nem `sendUpdates` (usar `sendUpdates=none`); incluir os dados do candidato (nome, telefone, e-mail) na descrição do evento.
+   - Convite por e-mail ao candidato continua apenas em conexões OAuth (se houver).
+3. **Respeitar somente-leitura**: corrigir o `sync_out` da conexão RE/MAX para `false` (a detecção de `accessRole` já existe, mas essa conexão foi gravada antes da correção) e re-checar o acesso ao reconectar.
+4. **Mensagens claras**: quando alguma agenda falhar, mostrar no toast qual agenda falhou e o motivo, em vez de só "falhou no Google Calendar" (o retorno já traz `failures`, falta exibir em `BrokerCandidateInteractionDialog.tsx`).
+5. **Validar**: agendar uma entrevista de teste e conferir que ela aparece em `dacmedia16@gmail.com`, e que a RE/MAX é ignorada na escrita (continua aparecendo na Agenda em modo leitura). Remover o evento de teste depois.
 
-5. **Relatar o resultado**
-   - Se o acesso falhar, indicar exatamente o que ajustar no Google (e-mail compartilhado / ID do calendário) sem alterar código.
+## Observação
 
-## Detalhes técnicos
-
-- Nenhuma mudança de schema prevista; a coluna `sync_out` já controla a escrita.
-- Se o teste revelar que algum caminho de escrita ignora `sync_out`, corrigir o filtro em `src/lib/google-calendar.server.ts`.
-- Se `accessRole` vier `freeBusyReader`, os eventos aparecem sem título — nesse caso avisar o usuário e sugerir pedir "Ver todos os detalhes".
+Enquanto o Workspace da RE/MAX só permitir compartilhamento externo "Ver todos os detalhes", nenhum evento criado aqui poderá ser gravado lá — a agenda RE/MAX seguirá só como leitura na Agenda do app.

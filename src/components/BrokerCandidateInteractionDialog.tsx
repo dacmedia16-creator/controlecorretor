@@ -98,9 +98,14 @@ export function BrokerCandidateInteractionDialog({
             extraNotes: notes.trim() || undefined,
           },
         });
-        toast.success(result.invited
+        const base = result.invited
           ? "Entrevista registrada e candidato convidado no Google Calendar"
-          : "Entrevista registrada no Google Calendar (candidato sem e-mail)");
+          : `Entrevista criada em ${result.calendarsCreated} agenda(s) do Google`;
+        if (result.failures.length > 0) {
+          toast.warning(base, { description: `Falhou em: ${result.failures.join(" | ")}` });
+        } else {
+          toast.success(base);
+        }
       } catch (e) {
         toast.error(gcalErrorMessage(e, "Interação salva, mas falhou no Google Calendar"));
         if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });

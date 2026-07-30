@@ -418,7 +418,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     const attendees: Array<{ email: string }> = [];
     if (data.inviteCandidate && cand.email) attendees.push({ email: cand.email });
 
-    const body = {
+    const baseBody = {
       summary: `Entrevista — ${cand.name}`,
       description: [
         `Candidato: ${cand.name}`,
@@ -428,7 +428,6 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
       ].filter(Boolean).join("\n"),
       start: { dateTime: start.toISOString(), timeZone: "America/Sao_Paulo" },
       end: { dateTime: end.toISOString(), timeZone: "America/Sao_Paulo" },
-      attendees,
       reminders: { useDefault: true },
     };
 
@@ -438,7 +437,8 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     const tracking: Array<{
       interaction_id: string; connection_id: string; calendar_id: string; google_event_id: string;
     }> = [];
-    let isFirstTarget = true;
+    let isFirstOauthTarget = true;
+    let invited = false;
 
     for (const conn of conns) {
       let accessToken: string;
@@ -448,10 +448,15 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
         failures.push(`${conn.google_email}: ${(err as Error).message}`);
         continue;
       }
+      // Contas de serviço não podem convidar participantes sem Domain-Wide
+      // Delegation (403 forbiddenForServiceAccounts): enviamos sem attendees.
+      const isServiceAccount = conn.auth_type === "service_account";
       for (const calendarId of connectionCalendarIds(conn)) {
-        // Convite ao candidato apenas no primeiro destino, para não duplicar e-mails.
-        const sendUpdates = attendees.length > 0 && isFirstTarget ? "all" : "none";
-        isFirstTarget = false;
+        // Convite ao candidato apenas no primeiro destino OAuth, para não duplicar e-mails.
+        const canInvite = !isServiceAccount && attendees.length > 0 && isFirstOauthTarget;
+        if (!isServiceAccount) isFirstOauthTarget = false;
+        const sendUpdates = canInvite ? "all" : "none";
+        const body = canInvite ? { ...baseBody, attendees } : baseBody;
         const res = await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=${sendUpdates}`,
           {
@@ -466,6 +471,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
         }
         const created = await res.json() as { id: string; htmlLink: string };
         createdCount++;
+        if (canInvite) invited = true;
         if (!first) first = created;
         if (data.interactionId) {
           tracking.push({
@@ -489,7 +495,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     return {
       eventId: first.id,
       htmlLink: first.htmlLink,
-      invited: attendees.length > 0,
+      invited,
       calendarsCreated: createdCount,
       failures,
     };
@@ -532,8 +538,8 @@ export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
         continue;
       }
       for (const calendarId of connectionCalendarIds(conn)) {
-        const sendUpdates = isFirstTarget ? "all" : "none";
-        isFirstTarget = false;
+        const sendUpdates = isFirstTarget && conn.auth_type !== "service_account" ? "all" : "none";
+        if (conn.auth_type !== "service_account") isFirstTarget = false;
         try {
           const eventId = await resolveEventId(conn, calendarId, accessToken, tracked, cand.name, data.oldStartISO);
           if (!eventId) continue;
@@ -597,8 +603,8 @@ export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
         continue;
       }
       for (const calendarId of connectionCalendarIds(conn)) {
-        const sendUpdates = isFirstTarget ? "all" : "none";
-        isFirstTarget = false;
+        const sendUpdates = isFirstTarget && conn.auth_type !== "service_account" ? "all" : "none";
+        if (conn.auth_type !== "service_account") isFirstTarget = false;
         try {
           const eventId = await resolveEventId(conn, calendarId, accessToken, tracked, cand.name, data.startISO);
           if (!eventId) continue;
