@@ -538,8 +538,8 @@ export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
         continue;
       }
       for (const calendarId of connectionCalendarIds(conn)) {
-        const sendUpdates = isFirstTarget ? "all" : "none";
-        isFirstTarget = false;
+        const sendUpdates = isFirstTarget && conn.auth_type !== "service_account" ? "all" : "none";
+        if (conn.auth_type !== "service_account") isFirstTarget = false;
         try {
           const eventId = await resolveEventId(conn, calendarId, accessToken, tracked, cand.name, data.oldStartISO);
           if (!eventId) continue;
