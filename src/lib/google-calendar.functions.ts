@@ -471,6 +471,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
         }
         const created = await res.json() as { id: string; htmlLink: string };
         createdCount++;
+        if (canInvite) invited = true;
         if (!first) first = created;
         if (data.interactionId) {
           tracking.push({
