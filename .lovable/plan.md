@@ -1,38 +1,20 @@
-## Situação atual (verificada agora)
-
-- Você tem 2 agendas conectadas, ambas por **conta de serviço**:
-  - **Denis Souza** (`dacmedia16@gmail.com`) — envio ligado (`sync_out = true`)
-  - **REMAX** (`denissouza@remax.com.br`) — **somente leitura** (`sync_out = false`), porque o Workspace da RE/MAX só permite compartilhamento "ver detalhes"
-- A tabela de eventos enviados (`google_calendar_events`) está **vazia**: nenhuma entrevista foi registrada como criada no Google até agora.
-- A última entrevista foi salva às 18:36 (candidato agendado para 01/08), depois do último ajuste — e mesmo assim não gerou registro de evento.
-
-Ou seja: ou a caixinha "Adicionar ao Google Agenda" não estava marcada/visível no momento do salvamento, ou a chamada ao Google falhou e o erro só apareceu num toast que passou. Hoje não há como saber depois do fato — não guardamos nenhum log.
-
-Importante: se você está olhando a agenda **RE/MAX**, nada vai aparecer lá — ela está marcada como somente leitura. Eventos criados pelo app vão para a agenda **dacmedia16@gmail.com**.
-
 ## O que vou fazer
 
-1. **Botão "Testar envio" na tela Agenda**
-   Cria um evento de teste real em cada agenda com envio ligado e mostra, por agenda, sucesso ou o erro exato devolvido pelo Google (status + mensagem). Inclui botão para apagar o evento de teste.
+Adicionar, no bloco de diagnóstico da tela **Agenda**, um botão **"Sincronizar agora"** ao lado de "Testar envio".
 
-2. **Registro de sincronização (log)**
-   Nova tabela de log guardando cada tentativa de envio: agenda, resultado, status HTTP e mensagem do Google. Exibida na Agenda numa seção "Últimas sincronizações", para nunca mais depender de um toast que sumiu.
+Comportamento:
 
-3. **Erros que não passam despercebidos**
-   - Se a entrevista for salva com a agenda conectada mas o evento não for criado, mostrar alerta persistente (não só toast) com o motivo.
-   - Se nenhuma conexão tiver envio ligado, avisar claramente antes de salvar: "Nenhuma agenda com permissão de escrita — o evento não será criado no Google".
+1. O sistema procura a **próxima entrevista pendente**: interação do tipo `entrevista` com data/hora futura que ainda **não tem evento registrado** no Google (sem linha correspondente em `google_calendar_events`).
+2. Cria o evento na agenda **Denis Souza** (`dacmedia16@gmail.com`) — e em qualquer outra agenda com envio ligado.
+3. Mostra o resultado: nome do candidato, data/hora e em qual agenda foi criado; se falhar, exibe o erro exato devolvido pelo Google (status + mensagem).
+4. Se não houver nada pendente, informa "Nenhuma entrevista pendente de envio".
+5. Toda tentativa fica gravada em **Últimas sincronizações**, como já acontece hoje.
 
-4. **Deixar o destino explícito na tela de agendamento**
-   No diálogo de interação, mostrar em qual(is) agenda(s) o evento será criado e sinalizar as somente-leitura, para não haver dúvida sobre onde procurar.
-
-5. **Verificar a permissão real da agenda `dacmedia16@gmail.com`**
-   Checar via API se a conta de serviço (`recrutamento-remax@recrutamento-504016.iam.gserviceaccount.com`) tem mesmo "Fazer alterações nos eventos" nessa agenda. Se tiver só leitura, ajusto o status no sistema e te digo exatamente o que mudar no Google.
+O botão mostra também **quantas entrevistas estão pendentes**, para você saber se vale clicar de novo (cada clique envia a próxima). Se você preferir enviar todas de uma vez, é só dizer que troco por um botão único "Sincronizar todas".
 
 ## Detalhes técnicos
 
-- Nova server fn `testGoogleCalendarWrite` (admin/gerente) em `src/lib/google-calendar.functions.ts`: cria e opcionalmente apaga um evento de teste, retornando `{ calendarId, ok, status, error }` por destino.
-- Migration: tabela `google_calendar_sync_log` (user_id, connection_id, calendar_id, operation, ok, http_status, error, created_at) com GRANTs e RLS restrita ao dono/admin; gravação via `supabaseAdmin` dentro das server fns de create/update/delete.
-- `createGoogleCalendarEvent` passa a registrar log em toda tentativa, inclusive falhas, e a retornar os destinos usados.
-- UI: bloco de diagnóstico em `src/routes/agenda.tsx` (ou no `GoogleCalendarBanner`) e aviso de destino no `BrokerCandidateInteractionDialog.tsx`.
-
-Nada do fluxo atual de recrutamento, kanban ou agenda é alterado — apenas diagnóstico, log e avisos.
+- Nova server fn `syncNextPendingInterview` em `src/lib/google-calendar.functions.ts` (protegida por `requireSupabaseAuth`): busca em `broker_candidate_interactions` (tipo `entrevista`, `next_follow_up_date >= now()`) a mais antiga sem linha em `google_calendar_events`, e reaproveita a mesma lógica de criação de `createGoogleCalendarEvent` (extraída para um helper compartilhado em `google-calendar.server.ts` para evitar duplicação), com log via `logSync`.
+- Nova server fn `countPendingInterviewSync` (ou o mesmo retorno da consulta) para exibir o contador no botão.
+- UI: botão + área de resultado em `src/components/GoogleCalendarDiagnostics.tsx`, invalidando as queries `gcal-sync-log`, `google-events` e a da agenda após sucesso.
+- Nenhuma alteração de schema; nada do fluxo atual de recrutamento, kanban ou agenda muda.

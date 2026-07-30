@@ -434,3 +434,152 @@ export async function recentSyncLog(userId: string, limit: number) {
   if (error) throw new Error(error.message);
   return data ?? [];
 }
+
+// ===== Entrevistas pendentes de envio ao Google =====
+
+export type PendingInterview = {
+  interactionId: string;
+  candidateId: string;
+  candidateName: string;
+  startISO: string;
+  notes: string | null;
+};
+
+/** Entrevistas futuras do usuário que ainda não têm evento criado no Google. */
+export async function listPendingInterviews(userId: string, limit = 20): Promise<PendingInterview[]> {
+  const { data: rows, error } = await supabaseAdmin
+    .from("broker_candidate_interactions")
+    .select("id,candidate_id,notes,next_follow_up_date")
+    .eq("user_id", userId)
+    .eq("interaction_type", "entrevista")
+    .gte("next_follow_up_date", new Date().toISOString())
+    .order("next_follow_up_date", { ascending: true })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  const list = (rows ?? []).filter((r) => !!r.next_follow_up_date);
+  if (list.length === 0) return [];
+
+  const { data: synced } = await supabaseAdmin
+    .from("google_calendar_events")
+    .select("interaction_id")
+    .in("interaction_id", list.map((r) => r.id));
+  const done = new Set((synced ?? []).map((s) => s.interaction_id));
+  const pending = list.filter((r) => !done.has(r.id));
+  if (pending.length === 0) return [];
+
+  const { data: cands } = await supabaseAdmin
+    .from("broker_candidates")
+    .select("id,name")
+    .in("id", pending.map((p) => p.candidate_id));
+  const nameById = new Map((cands ?? []).map((c) => [c.id, c.name as string]));
+
+  return pending.map((p) => ({
+    interactionId: p.id,
+    candidateId: p.candidate_id,
+    candidateName: nameById.get(p.candidate_id) ?? "Candidato",
+    startISO: p.next_follow_up_date as string,
+    notes: p.notes ?? null,
+  }));
+}
+
+/** Reenvia a próxima entrevista pendente para todas as agendas com envio ligado. */
+export async function syncNextPendingInterview(userId: string) {
+  const pending = await listPendingInterviews(userId, 20);
+  if (pending.length === 0) {
+    return { synced: false as const, remaining: 0, interview: null, targets: [] as string[], failures: [] as string[] };
+  }
+  const next = pending[0];
+
+  const conns = await listConnections(userId, { syncOut: true });
+  if (conns.length === 0) throw new Error("Nenhuma agenda com envio ligado — ative \"Enviar compromissos\" em uma agenda com permissão de escrita.");
+
+  const { data: cand } = await supabaseAdmin
+    .from("broker_candidates")
+    .select("name,email,phone")
+    .eq("id", next.candidateId)
+    .maybeSingle();
+
+  const start = new Date(next.startISO);
+  const end = new Date(start.getTime() + 30 * 60_000);
+  const body = {
+    summary: `Entrevista — ${cand?.name ?? next.candidateName}`,
+    description: [
+      `Candidato: ${cand?.name ?? next.candidateName}`,
+      cand?.phone ? `Telefone: ${cand.phone}` : null,
+      cand?.email ? `Email: ${cand.email}` : null,
+      next.notes ? `\n${next.notes}` : null,
+    ].filter(Boolean).join("\n"),
+    start: { dateTime: start.toISOString(), timeZone: "America/Sao_Paulo" },
+    end: { dateTime: end.toISOString(), timeZone: "America/Sao_Paulo" },
+    reminders: { useDefault: true },
+  };
+
+  const targets: string[] = [];
+  const failures: string[] = [];
+  const tracking: Array<{ interaction_id: string; connection_id: string; calendar_id: string; google_event_id: string }> = [];
+
+  for (const conn of conns) {
+    let accessToken: string;
+    try {
+      accessToken = await freshTokenFor(conn);
+    } catch (err) {
+      const msg = (err as Error).message;
+      failures.push(`${conn.google_email}: ${msg}`);
+      await logSync([{
+        user_id: userId, connection_id: conn.id, google_email: conn.google_email,
+        operation: "create", ok: false, error: msg, interaction_id: next.interactionId,
+      }]);
+      continue;
+    }
+    for (const calendarId of connectionCalendarIds(conn)) {
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        failures.push(`${conn.google_email}/${calendarId}: ${res.status} ${errText}`);
+        await logSync([{
+          user_id: userId, connection_id: conn.id, calendar_id: calendarId,
+          google_email: conn.google_email, operation: "create", ok: false,
+          http_status: res.status, error: errText, interaction_id: next.interactionId,
+        }]);
+        continue;
+      }
+      const created = await res.json() as { id: string };
+      targets.push(`${conn.display_name ?? conn.google_email} (${calendarId})`);
+      tracking.push({
+        interaction_id: next.interactionId,
+        connection_id: conn.id,
+        calendar_id: calendarId,
+        google_event_id: created.id,
+      });
+      await logSync([{
+        user_id: userId, connection_id: conn.id, calendar_id: calendarId,
+        google_email: conn.google_email, operation: "create", ok: true,
+        http_status: res.status, interaction_id: next.interactionId,
+      }]);
+    }
+  }
+
+  if (tracking.length > 0) {
+    await supabaseAdmin
+      .from("google_calendar_events")
+      .upsert(tracking, { onConflict: "interaction_id,connection_id,calendar_id" });
+  }
+
+  return {
+    synced: tracking.length > 0,
+    remaining: Math.max(0, pending.length - (tracking.length > 0 ? 1 : 0)),
+    interview: {
+      candidateName: cand?.name ?? next.candidateName,
+      startISO: next.startISO,
+    },
+    targets,
+    failures,
+  };
+}

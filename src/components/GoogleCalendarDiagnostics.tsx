@@ -1,10 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle2, Loader2, Stethoscope } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { gcalErrorMessage } from "@/lib/gcal-error";
-import { testGoogleCalendarWrite, listGoogleSyncLog } from "@/lib/google-calendar.functions";
+import {
+  testGoogleCalendarWrite,
+  listGoogleSyncLog,
+  listPendingInterviewSync,
+  syncNextPendingInterviewFn,
+} from "@/lib/google-calendar.functions";
 
 const OP_LABEL: Record<string, string> = {
   create: "Criar",
@@ -17,6 +22,8 @@ export function GoogleCalendarDiagnostics() {
   const qc = useQueryClient();
   const runTest = useServerFn(testGoogleCalendarWrite);
   const loadLog = useServerFn(listGoogleSyncLog);
+  const loadPending = useServerFn(listPendingInterviewSync);
+  const syncNext = useServerFn(syncNextPendingInterviewFn);
 
   const logQuery = useQuery({
     queryKey: ["gcal-sync-log"],
@@ -48,18 +55,68 @@ export function GoogleCalendarDiagnostics() {
   const entries = logQuery.data?.entries ?? [];
   const results = testMut.data?.results ?? [];
 
+  const pendingQuery = useQuery({
+    queryKey: ["gcal-pending-interviews"],
+    queryFn: () => loadPending(),
+  });
+  const pendingCount = pendingQuery.data?.count ?? 0;
+  const nextPending = pendingQuery.data?.pending?.[0];
+
+  const syncMut = useMutation({
+    mutationFn: () => syncNext(),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["gcal-sync-log"] });
+      qc.invalidateQueries({ queryKey: ["gcal-pending-interviews"] });
+      qc.invalidateQueries({ queryKey: ["google-events"] });
+      if (!res.interview) {
+        toast.info("Nenhuma entrevista pendente de envio");
+        return;
+      }
+      const quando = new Date(res.interview.startISO).toLocaleString("pt-BR", {
+        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+      });
+      if (res.synced) {
+        toast.success(`Entrevista de ${res.interview.candidateName} (${quando}) enviada`, {
+          description: `Criada em: ${res.targets.join(", ")}${res.failures.length ? ` · Falhas: ${res.failures.join(" | ")}` : ""}`.slice(0, 400),
+        });
+      } else {
+        toast.error(`Falha ao enviar entrevista de ${res.interview.candidateName}`, {
+          description: res.failures.join(" | ").slice(0, 400),
+        });
+      }
+    },
+    onError: (e: Error) => toast.error(gcalErrorMessage(e, "Não foi possível sincronizar")),
+  });
+
   return (
     <div className="rounded-md border bg-background p-3 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Stethoscope className="size-4" /> Diagnóstico do envio
         </div>
-        <Button size="sm" variant="outline" onClick={() => testMut.mutate()} disabled={testMut.isPending}>
-          {testMut.isPending ? <><Loader2 className="size-4 animate-spin" /> Testando…</> : "Testar envio"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={() => syncMut.mutate()}
+            disabled={syncMut.isPending || pendingQuery.isLoading || pendingCount === 0}
+          >
+            {syncMut.isPending
+              ? <><Loader2 className="size-4 animate-spin" /> Sincronizando…</>
+              : <><RefreshCw className="size-4" /> Sincronizar agora{pendingCount > 0 ? ` (${pendingCount})` : ""}</>}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => testMut.mutate()} disabled={testMut.isPending}>
+            {testMut.isPending ? <><Loader2 className="size-4 animate-spin" /> Testando…</> : "Testar envio"}
+          </Button>
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
+        {pendingCount === 0
+          ? "Nenhuma entrevista pendente de envio ao Google."
+          : `${pendingCount} entrevista(s) futura(s) ainda não enviada(s). Próxima: ${nextPending?.candidateName} — ${new Date(nextPending!.startISO).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}.`}
+      </p>
+      <p className="text-xs text-muted-foreground">
         Cria (e apaga em seguida) um evento de teste em cada agenda com envio ligado, mostrando o erro exato do Google.
+
       </p>
 
       {results.length > 0 && (
