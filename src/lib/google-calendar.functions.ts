@@ -437,6 +437,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     let first: { id: string; htmlLink: string } | null = null;
     let createdCount = 0;
     const failures: string[] = [];
+    const targets: string[] = [];
     const tracking: Array<{
       interaction_id: string; connection_id: string; calendar_id: string; google_event_id: string;
     }> = [];
@@ -448,7 +449,12 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
       try {
         accessToken = await freshTokenFor(conn);
       } catch (err) {
-        failures.push(`${conn.google_email}: ${(err as Error).message}`);
+        const msg = (err as Error).message;
+        failures.push(`${conn.google_email}: ${msg}`);
+        await logSync([{
+          user_id: context.userId, connection_id: conn.id, google_email: conn.google_email,
+          operation: "create", ok: false, error: msg, interaction_id: data.interactionId ?? null,
+        }]);
         continue;
       }
       // Contas de serviço não podem convidar participantes sem Domain-Wide
