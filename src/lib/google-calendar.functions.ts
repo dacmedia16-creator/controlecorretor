@@ -654,3 +654,21 @@ export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
     }
     return { deleted: deletedCount > 0, deletedCount, failures };
   });
+
+/** Cria um evento de teste em cada agenda com envio ligado e devolve o erro exato do Google. */
+export const testGoogleCalendarWrite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ keepEvent: z.boolean().default(false) }).optional().parse(d ?? undefined))
+  .handler(async ({ data, context }) => {
+    await assertCanManageServiceCalendar(context.userId);
+    return runWriteTest(context.userId, data?.keepEvent ?? false);
+  });
+
+/** Últimas tentativas de sincronização com o Google Agenda. */
+export const listGoogleSyncLog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ limit: z.number().int().min(1).max(50).default(15) }).optional().parse(d ?? undefined))
+  .handler(async ({ data, context }) => {
+    const entries = await recentSyncLog(context.userId, data?.limit ?? 15);
+    return { entries };
+  });
