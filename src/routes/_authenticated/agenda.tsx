@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
 import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/google-calendar.functions";
+import { gcalErrorMessage, isGcalReconnectError } from "@/lib/gcal-error";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -207,8 +208,8 @@ function AgendaPage() {
           ? "Compromisso atualizado e movido no Google Calendar"
           : "Atualizado no sistema; evento não localizado no Google Calendar");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "erro";
-        toast.error(`Atualizado no sistema, mas falhou no Google Calendar: ${msg}`);
+        toast.error(gcalErrorMessage(e, "Atualizado no sistema, mas falhou no Google Calendar"));
+        if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
       }
     } else {
       toast.success("Compromisso reagendado");
@@ -412,8 +413,8 @@ function EventPopover({
           ? "Compromisso atualizado e movido no Google Calendar"
           : "Atualizado no sistema; evento não localizado no Google Calendar");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "erro";
-        toast.error(`Atualizado no sistema, mas falhou no Google Calendar: ${msg}`);
+        toast.error(gcalErrorMessage(e, "Atualizado no sistema, mas falhou no Google Calendar"));
+        if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
       }
     } else {
       toast.success("Compromisso atualizado");
@@ -442,8 +443,8 @@ function EventPopover({
           ? "Compromisso excluído e removido do Google Calendar"
           : "Excluído no sistema; evento não localizado no Google Calendar");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "erro";
-        toast.error(`Excluído no sistema, mas falhou no Google Calendar: ${msg}`);
+        toast.error(gcalErrorMessage(e, "Excluído no sistema, mas falhou no Google Calendar"));
+        if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
       }
     } else {
       toast.success("Compromisso excluído");

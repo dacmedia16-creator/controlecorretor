@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { gcalErrorMessage, isGcalReconnectError } from "@/lib/gcal-error";
 import {
   getMyGoogleCalendarStatus,
   createGoogleCalendarEvent,
@@ -100,8 +101,8 @@ export function BrokerCandidateInteractionDialog({
           ? "Entrevista registrada e candidato convidado no Google Calendar"
           : "Entrevista registrada no Google Calendar (candidato sem e-mail)");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "erro";
-        toast.error(`Interação salva, mas falhou no Google Calendar: ${msg}`);
+        toast.error(gcalErrorMessage(e, "Interação salva, mas falhou no Google Calendar"));
+        if (isGcalReconnectError(e)) qc.invalidateQueries({ queryKey: ["gcal-status"] });
       }
     } else {
       toast.success("Interação registrada");

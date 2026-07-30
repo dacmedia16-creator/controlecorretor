@@ -97,6 +97,9 @@ export async function exchangeCodeAndStore(code: string, state: string): Promise
   return { uid };
 }
 
+export const GCAL_RECONNECT_ERROR =
+  "GCAL_RECONNECT: Sua conexão com o Google Calendar expirou. Reconecte na página de Recrutamento.";
+
 export async function getFreshAccessToken(userId: string): Promise<string> {
   const { data, error } = await supabaseAdmin
     .from("user_google_calendar_connections")
@@ -120,9 +123,18 @@ export async function getFreshAccessToken(userId: string): Promise<string> {
   });
   if (!tokenRes.ok) {
     const t = await tokenRes.text();
+    if (t.includes("invalid_grant")) {
+      // Refresh token revogado/expirado — remove a conexão morta para o app pedir reconexão.
+      await supabaseAdmin
+        .from("user_google_calendar_connections")
+        .delete()
+        .eq("user_id", userId);
+      throw new Error(GCAL_RECONNECT_ERROR);
+    }
     throw new Error(`Refresh falhou: ${tokenRes.status} ${t}`);
   }
   const refreshed = await tokenRes.json() as { access_token: string; expires_in: number };
+
   const newExpiresAt = new Date(Date.now() + (refreshed.expires_in - 60) * 1000).toISOString();
   await supabaseAdmin
     .from("user_google_calendar_connections")
