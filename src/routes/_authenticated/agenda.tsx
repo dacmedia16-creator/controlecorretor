@@ -144,16 +144,46 @@ function AgendaPage() {
   });
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const totalMinutes = (HOUR_END - HOUR_START) * 60;
-  const slots = Array.from({ length: (HOUR_END - HOUR_START) * (60 / SLOT_MIN) + 1 }, (_, i) => i * SLOT_MIN);
+
+  // amplia a faixa de horas quando existem compromissos fora do padrão
+  const [hourStart, hourEnd] = useMemo(() => {
+    let s = HOUR_START;
+    let e = HOUR_END;
+    for (const ev of events) {
+      s = Math.min(s, ev.date.getHours());
+      e = Math.max(e, ev.date.getHours() + 1);
+    }
+    return [Math.max(0, s), Math.min(24, e)] as const;
+  }, [events]);
+
+  const totalMinutes = (hourEnd - hourStart) * 60;
+  const slots = Array.from({ length: (hourEnd - hourStart) * (60 / SLOT_MIN) + 1 }, (_, i) => i * SLOT_MIN);
   const now = new Date();
   const nowInRange = now >= weekStart && now < weekEnd;
-  const nowTop = nowInRange ? (now.getHours() * 60 + now.getMinutes() - HOUR_START * 60) * PX_PER_MIN : 0;
+  const nowTop = nowInRange ? (now.getHours() * 60 + now.getMinutes() - hourStart * 60) * PX_PER_MIN : 0;
 
   function eventStyle(ev: AgendaEvent) {
-    const mins = ev.date.getHours() * 60 + ev.date.getMinutes() - HOUR_START * 60;
-    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px`, minHeight: "44px" };
+    const mins = ev.date.getHours() * 60 + ev.date.getMinutes() - hourStart * 60;
+    return { top: `${Math.max(0, mins) * PX_PER_MIN}px`, height: `${30 * PX_PER_MIN - 2}px`, minHeight: "40px" };
   }
+
+  // rola até o horário atual (ou primeiro compromisso da semana) ao abrir
+  const scrollKey = `${weekStart.toISOString()}-${view}-${events.length}`;
+  const scrolledRef = useRef<string>("");
+  useEffect(() => {
+    if (view !== "semana") return;
+    const el = scrollRef.current;
+    if (!el || scrolledRef.current === scrollKey) return;
+    const target = nowInRange
+      ? now.getHours() * 60 + now.getMinutes()
+      : events.length
+        ? Math.min(...events.map((e) => e.date.getHours() * 60 + e.date.getMinutes()))
+        : hourStart * 60;
+    const top = Math.max(0, (target - hourStart * 60) * PX_PER_MIN - 80);
+    el.scrollTo({ top, behavior: "smooth" });
+    scrolledRef.current = scrollKey;
+  }, [scrollKey, view, nowInRange, events, hourStart]);
+
 
   const colorOf: Record<EventKind, string> = {
     entrevista: "bg-primary text-primary-foreground border-primary",
