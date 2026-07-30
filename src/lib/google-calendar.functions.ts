@@ -437,7 +437,8 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     const tracking: Array<{
       interaction_id: string; connection_id: string; calendar_id: string; google_event_id: string;
     }> = [];
-    let isFirstTarget = true;
+    let isFirstOauthTarget = true;
+    let invited = false;
 
     for (const conn of conns) {
       let accessToken: string;
@@ -447,10 +448,15 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
         failures.push(`${conn.google_email}: ${(err as Error).message}`);
         continue;
       }
+      // Contas de serviço não podem convidar participantes sem Domain-Wide
+      // Delegation (403 forbiddenForServiceAccounts): enviamos sem attendees.
+      const isServiceAccount = conn.auth_type === "service_account";
       for (const calendarId of connectionCalendarIds(conn)) {
-        // Convite ao candidato apenas no primeiro destino, para não duplicar e-mails.
-        const sendUpdates = attendees.length > 0 && isFirstTarget ? "all" : "none";
-        isFirstTarget = false;
+        // Convite ao candidato apenas no primeiro destino OAuth, para não duplicar e-mails.
+        const canInvite = !isServiceAccount && attendees.length > 0 && isFirstOauthTarget;
+        if (!isServiceAccount) isFirstOauthTarget = false;
+        const sendUpdates = canInvite ? "all" : "none";
+        const body = canInvite ? { ...baseBody, attendees } : baseBody;
         const res = await fetch(
           `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=${sendUpdates}`,
           {
