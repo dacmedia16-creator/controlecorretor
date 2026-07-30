@@ -1,36 +1,32 @@
 ## Objetivo
 
-Conectar a agenda RE/MAX (`denissouza@remax.com.br`) ao sistema em **modo somente leitura**, já que o Workspace RE/MAX bloqueia compartilhamento externo com permissão de edição.
+Testar a conexão da agenda RE/MAX (`denissouza@remax.com.br`) via conta de serviço, em modo somente leitura, e confirmar que os eventos aparecem na tela Agenda.
 
-Resultado: os compromissos da RE/MAX aparecem na Agenda do sistema (evitando conflitos de horário), enquanto entrevistas criadas aqui continuam indo para a agenda pessoal já conectada.
+## Passos
 
-## O que muda
+1. **Verificar a conta de serviço**
+   - Confirmar que o segredo `GOOGLE_SERVICE_ACCOUNT_JSON` está presente e que o token RS256 é emitido com sucesso (`serviceAccountToken()` em `src/lib/google-calendar.server.ts`).
 
-**1. Conexão de serviço nasce como leitura**
-Ao conectar uma agenda de serviço, gravar `sync_in = true` e `sync_out = false`. Assim o sistema lê os eventos, mas nunca tenta criar/editar/excluir naquela agenda — evitando erros 403 do Google.
+2. **Testar acesso ao calendário**
+   - Chamar a API do Google para `calendars/denissouza@remax.com.br` e `users/me/calendarList/...` usando o token da conta de serviço.
+   - Resultados esperados:
+     - `200` + `accessRole: "reader"` → conexão somente leitura (esperado).
+     - `404/403` → o compartilhamento no Google ainda não propagou ou o ID está errado.
 
-**2. Detecção automática do nível de acesso**
-No "Testar e conectar", além de validar o acesso, verificar se a conta de serviço tem permissão de escrita. Se tiver apenas leitura, avisar de forma clara no resultado ("conectada em modo somente leitura") em vez de falhar.
+3. **Executar a conexão real**
+   - Rodar `connectServiceCalendar` para gravar a conexão com `sync_in: true`, `sync_out: false`.
 
-**3. Ajuste dos textos do diálogo**
-Hoje o passo 1 pede "Fazer alterações nos eventos". Passar a explicar as duas possibilidades:
-- Com permissão de alteração → sincronização completa
-- Só com "Ver todos os detalhes" (caso de organizações restritas como a RE/MAX) → leitura, ainda útil para ver os compromissos
+4. **Validar na Agenda**
+   - Abrir `/agenda` no preview autenticado e confirmar:
+     - a conexão "RE/MAX" aparece no banner com o aviso de somente leitura;
+     - eventos do Google da agenda RE/MAX são listados na semana atual;
+     - nenhuma tentativa de escrita é feita nessa conexão (erros 403 não devem ocorrer).
 
-**4. Indicação visual na Agenda**
-No card de contas Google, exibir badge **"Somente leitura"** nas conexões com `sync_out = false`, para ficar claro que eventos criados no sistema não vão para aquela agenda.
-
-**5. Proteção nas operações de escrita**
-Garantir que criar/editar/excluir evento ignore conexões somente leitura (o filtro `sync_out` já existe — será revisado para cobrir todos os caminhos, inclusive exclusão e reagendamento).
-
-## Depois de aplicar
-
-Você abre **Agenda** → botão de escudo **"Conectar agenda de serviço"** → cola `denissouza@remax.com.br` → **Testar e conectar**. Sem tela de login do Google.
+5. **Relatar o resultado**
+   - Se o acesso falhar, indicar exatamente o que ajustar no Google (e-mail compartilhado / ID do calendário) sem alterar código.
 
 ## Detalhes técnicos
 
-- `src/lib/google-calendar.functions.ts` — `connectServiceCalendar`: gravar `sync_in: true`, `sync_out: false`; testar escrita com uma chamada leve à API do Calendar e retornar `writable: boolean`.
-- `src/components/ServiceCalendarDialog.tsx` — textos do passo 1 e toast de sucesso diferenciando leitura/escrita.
-- `src/components/GoogleCalendarBanner.tsx` — badge "Somente leitura" quando `sync_out === false`.
-- Revisão das funções de escrita em `google-calendar.server.ts` / `.functions.ts` para confirmar o filtro `syncOut: true` em todos os caminhos.
-- Sem migração de banco: as colunas `sync_in`, `sync_out` e `auth_type` já existem.
+- Nenhuma mudança de schema prevista; a coluna `sync_out` já controla a escrita.
+- Se o teste revelar que algum caminho de escrita ignora `sync_out`, corrigir o filtro em `src/lib/google-calendar.server.ts`.
+- Se `accessRole` vier `freeBusyReader`, os eventos aparecem sem título — nesse caso avisar o usuário e sugerir pedir "Ver todos os detalhes".
