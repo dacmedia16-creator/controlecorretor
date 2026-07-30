@@ -418,7 +418,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     const attendees: Array<{ email: string }> = [];
     if (data.inviteCandidate && cand.email) attendees.push({ email: cand.email });
 
-    const body = {
+    const baseBody = {
       summary: `Entrevista — ${cand.name}`,
       description: [
         `Candidato: ${cand.name}`,
@@ -428,7 +428,6 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
       ].filter(Boolean).join("\n"),
       start: { dateTime: start.toISOString(), timeZone: "America/Sao_Paulo" },
       end: { dateTime: end.toISOString(), timeZone: "America/Sao_Paulo" },
-      attendees,
       reminders: { useDefault: true },
     };
 
