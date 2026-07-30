@@ -495,7 +495,7 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     return {
       eventId: first.id,
       htmlLink: first.htmlLink,
-      invited: attendees.length > 0,
+      invited,
       calendarsCreated: createdCount,
       failures,
     };
