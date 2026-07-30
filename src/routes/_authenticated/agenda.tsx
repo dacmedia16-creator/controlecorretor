@@ -96,6 +96,8 @@ function AgendaPage() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
+  const patchRaw = useServerFn(patchRawGoogleEvent);
+
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
   const fetchGoogleEvents = useServerFn(listGoogleEventsRange);
   const { data: gcalStatus } = useQuery({
