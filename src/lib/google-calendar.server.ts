@@ -258,8 +258,11 @@ export function connectionCalendarIds(conn: GcalConnection): string[] {
 
 /** Token válido para uma conexão específica (renova e persiste quando necessário). */
 export async function freshTokenFor(conn: GcalConnection): Promise<string> {
-  const expiresAt = new Date(conn.expires_at).getTime();
-  if (Date.now() < expiresAt - 60_000) return conn.access_token;
+  if (conn.auth_type === "service_account") return serviceAccountToken();
+
+  const expiresAt = conn.expires_at ? new Date(conn.expires_at).getTime() : 0;
+  if (conn.access_token && Date.now() < expiresAt - 60_000) return conn.access_token;
+  if (!conn.refresh_token) throw new Error(GCAL_RECONNECT_ERROR);
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -271,6 +274,7 @@ export async function freshTokenFor(conn: GcalConnection): Promise<string> {
       grant_type: "refresh_token",
     }),
   });
+
   if (!tokenRes.ok) {
     const t = await tokenRes.text();
     if (t.includes("invalid_grant")) {
