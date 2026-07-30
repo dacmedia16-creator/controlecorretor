@@ -74,9 +74,81 @@ export const listMyGoogleConnections = createServerFn({ method: "GET" })
         calendar_ids: connectionCalendarIds(c),
         sync_out: c.sync_out,
         sync_in: c.sync_in,
+        auth_type: c.auth_type ?? "oauth",
+        display_name: c.display_name,
+        service_account_email: c.service_account_email,
       })),
     };
   });
+
+/** E-mail da conta de serviço, para o admin compartilhar a agenda com ele. */
+export const getServiceAccountInfo = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    try {
+      const { client_email } = serviceAccountKey();
+      return { available: true as const, email: client_email, error: null as string | null };
+    } catch (err) {
+      return { available: false as const, email: null, error: (err as Error).message };
+    }
+  });
+
+async function assertCanManageServiceCalendar(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  const roles = (data ?? []).map((r) => r.role as string);
+  if (!roles.includes("admin") && !roles.includes("gerente_recrutamento")) {
+    throw new Error("Apenas administradores podem conectar uma agenda de serviço.");
+  }
+}
+
+/** Conecta um calendário compartilhado com a conta de serviço (sem OAuth do usuário). */
+export const connectServiceCalendar = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    calendarId: z.string().trim().min(3).max(200),
+    displayName: z.string().trim().max(100).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertCanManageServiceCalendar(context.userId);
+    const { client_email } = serviceAccountKey();
+    const accessToken = await serviceAccountToken();
+
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(data.calendarId)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (res.status === 404 || res.status === 403) {
+      throw new Error(
+        `A conta de serviço não tem acesso a "${data.calendarId}". No Google Agenda, abra as configurações desse calendário, ` +
+        `compartilhe com ${client_email} e escolha a permissão "Fazer alterações nos eventos".`,
+      );
+    }
+    if (!res.ok) {
+      throw new Error(`Google Calendar API ${res.status}: ${await res.text()}`);
+    }
+    const cal = await res.json() as { id: string; summary?: string };
+
+    const { error } = await supabaseAdmin
+      .from("user_google_calendar_connections")
+      .upsert({
+        user_id: context.userId,
+        google_email: cal.id,
+        auth_type: "service_account",
+        service_account_email: client_email,
+        display_name: data.displayName?.trim() || cal.summary || cal.id,
+        calendar_ids: [cal.id],
+        access_token: null,
+        refresh_token: null,
+        expires_at: null,
+      }, { onConflict: "user_id,google_email" });
+    if (error) throw new Error(error.message);
+    return { ok: true, calendarName: cal.summary ?? cal.id };
+  });
+
 
 export const listMyGoogleCalendars = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
