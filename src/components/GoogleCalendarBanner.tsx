@@ -1,16 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useSearch, useNavigate } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, CheckCircle2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { gcalErrorMessage } from "@/lib/gcal-error";
 import {
   startGoogleCalendarConnect,
   getMyGoogleCalendarStatus,
   disconnectGoogleCalendar,
+  listMyGoogleCalendars,
+  setMyGoogleCalendars,
 } from "@/lib/google-calendar.functions";
+
 
 export function GoogleCalendarBanner() {
   const qc = useQueryClient();
