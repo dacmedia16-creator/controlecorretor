@@ -112,17 +112,33 @@ function AgendaPage() {
   });
 
   const googleEvents = useMemo<AgendaEvent[]>(() => {
-    return (googleQuery.data?.events ?? []).map((e) => ({
-      id: `g-${e.id}`,
-      kind: "google" as const,
-      date: new Date(e.startISO),
-      title: e.title,
-      phone: null,
-      notes: [e.location, e.description].filter(Boolean).join("\n") || null,
-      link: null,
-      google: { accountEmail: e.accountEmail, htmlLink: e.htmlLink, allDay: e.allDay, endISO: e.endISO },
-    }));
+    return (googleQuery.data?.events ?? []).map((e) => {
+      // id vem como `${connectionId}:${calendarId}:${googleEventId}`
+      const first = e.id.indexOf(":");
+      const last = e.id.lastIndexOf(":");
+      const connectionId = first > 0 ? e.id.slice(0, first) : "";
+      const eventId = last > first ? e.id.slice(last + 1) : "";
+      return {
+        id: `g-${e.id}`,
+        kind: "google" as const,
+        date: new Date(e.startISO),
+        title: e.title,
+        phone: null,
+        notes: [e.location, e.description].filter(Boolean).join("\n") || null,
+        link: null,
+        google: {
+          accountEmail: e.accountEmail,
+          htmlLink: e.htmlLink,
+          allDay: e.allDay,
+          endISO: e.endISO,
+          connectionId,
+          calendarId: e.calendarId,
+          eventId,
+        },
+      };
+    });
   }, [googleQuery.data]);
+
 
   const { data: localEvents = [], isLoading } = useQuery({
 
