@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronLeft, ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
-import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/google-calendar.functions";
+import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent, listGoogleEventsRange } from "@/lib/google-calendar.functions";
 import { gcalErrorMessage, isGcalReconnectError } from "@/lib/gcal-error";
 import {
   AlertDialog,
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/agenda")({
 });
 
 
-type EventKind = "entrevista" | "followup_candidato" | "followup_lead";
+type EventKind = "entrevista" | "followup_candidato" | "followup_lead" | "google";
 type AgendaEvent = {
   id: string;
   kind: EventKind;
@@ -38,7 +38,9 @@ type AgendaEvent = {
   title: string;
   phone: string | null;
   notes: string | null;
-  link: { to: "/recrutamento/$id" | "/leads/$id"; params: { id: string } };
+  link: { to: "/recrutamento/$id" | "/leads/$id"; params: { id: string } } | null;
+  /** eventos vindos do Google (somente leitura) */
+  google?: { accountEmail: string; htmlLink: string | null; allDay: boolean; endISO: string | null };
 };
 
 const HOUR_START = 7;
@@ -82,13 +84,38 @@ function AgendaPage() {
 
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
+  const fetchGoogleEvents = useServerFn(listGoogleEventsRange);
   const { data: gcalStatus } = useQuery({
     queryKey: ["gcal-status"],
     queryFn: () => getStatus(),
   });
   const calendarConnected = !!gcalStatus?.connected;
 
-  const { data: events = [], isLoading } = useQuery({
+  const googleQuery = useQuery({
+    queryKey: ["google-events", weekStart.toISOString()],
+    queryFn: () => fetchGoogleEvents({
+      data: { startISO: weekStart.toISOString(), endISO: weekEnd.toISOString() },
+    }),
+    enabled: (gcalStatus?.accountsCount ?? 0) > 0,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const googleEvents = useMemo<AgendaEvent[]>(() => {
+    return (googleQuery.data?.events ?? []).map((e) => ({
+      id: `g-${e.id}`,
+      kind: "google" as const,
+      date: new Date(e.startISO),
+      title: e.title,
+      phone: null,
+      notes: [e.location, e.description].filter(Boolean).join("\n") || null,
+      link: null,
+      google: { accountEmail: e.accountEmail, htmlLink: e.htmlLink, allDay: e.allDay, endISO: e.endISO },
+    }));
+  }, [googleQuery.data]);
+
+  const { data: localEvents = [], isLoading } = useQuery({
+
     queryKey: ["agenda", weekStart.toISOString()],
     queryFn: async () => {
       const startIso = weekStart.toISOString();
@@ -143,7 +170,10 @@ function AgendaPage() {
     },
   });
 
+  const events = useMemo(() => [...localEvents, ...googleEvents], [localEvents, googleEvents]);
+
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
 
   // amplia a faixa de horas quando existem compromissos fora do padrão
   const [hourStart, hourEnd] = useMemo(() => {
@@ -189,11 +219,13 @@ function AgendaPage() {
     entrevista: "bg-primary text-primary-foreground border-primary",
     followup_candidato: "bg-amber-500 text-white border-amber-600",
     followup_lead: "bg-blue-500 text-white border-blue-600",
+    google: "bg-slate-600 text-white border-slate-700",
   };
   const labelOf: Record<EventKind, string> = {
     entrevista: "Entrevista",
     followup_candidato: "Follow-up candidato",
     followup_lead: "Follow-up lead",
+    google: "Google Agenda",
   };
 
   function snapMinutes(y: number) {
@@ -316,14 +348,23 @@ function AgendaPage() {
                 {ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
               </span>
               <span className="truncate">{ev.title}</span>
+              {ev.google && (
+                <span className="truncate text-xs text-muted-foreground">{ev.google.accountEmail}</span>
+              )}
               {ev.phone && (
                 <a href={whatsappUrl(ev.phone)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
                   <MessageCircle className="size-3" /> {ev.phone}
                 </a>
               )}
-              <Button asChild size="sm" variant="outline" className="ml-auto">
-                <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
-              </Button>
+              {ev.link ? (
+                <Button asChild size="sm" variant="outline" className="ml-auto">
+                  <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+                </Button>
+              ) : ev.google?.htmlLink ? (
+                <Button asChild size="sm" variant="outline" className="ml-auto">
+                  <a href={ev.google.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
+                </Button>
+              ) : null}
             </div>
           ))}
           {!isLoading && events.length === 0 && (
@@ -470,7 +511,7 @@ function EventPopover({
       try {
         const r = await patchEvent({
           data: {
-            candidateId: ev.link.params.id,
+            candidateId: ev.link!.params.id,
             oldStartISO: ev.date.toISOString(),
             newStartISO: newIso,
             durationMinutes: duration,
@@ -504,7 +545,7 @@ function EventPopover({
     if (isInterview && calendarConnected) {
       try {
         const r = await removeEvent({
-          data: { candidateId: ev.link.params.id, startISO: ev.date.toISOString() },
+          data: { candidateId: ev.link!.params.id, startISO: ev.date.toISOString() },
         });
         toast.success(r.deleted
           ? "Compromisso excluído e removido do Google Calendar"
@@ -520,6 +561,40 @@ function EventPopover({
     qc.invalidateQueries({ queryKey: ["agenda", weekStartIso] });
   }
 
+
+  if (ev.google) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            className={`absolute left-1 right-1 z-20 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:opacity-90 ${colorOf[ev.kind]}`}
+            style={style}
+          >
+            <div className="font-semibold">
+              {ev.google.allDay ? "Dia todo" : ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </div>
+            <div className="truncate">{ev.title}</div>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 space-y-2 text-sm">
+          <div>
+            <div className="text-xs font-medium text-muted-foreground">Google Agenda · {ev.google.accountEmail}</div>
+            <div className="font-semibold">{ev.title}</div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {ev.date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: ev.google.allDay ? undefined : "short" })}
+          </div>
+          {ev.notes && <p className="whitespace-pre-wrap text-xs text-muted-foreground">{ev.notes}</p>}
+          <p className="text-xs text-muted-foreground">Evento externo — edite no Google Calendar.</p>
+          {ev.google.htmlLink && (
+            <Button asChild size="sm" variant="outline" className="w-full">
+              <a href={ev.google.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
+            </Button>
+          )}
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
   return (
     <Popover>
@@ -537,7 +612,7 @@ function EventPopover({
               eventId: ev.id,
               oldIso: ev.date.toISOString(),
               kind: ev.kind,
-              refId: ev.link.params.id,
+              refId: ev.link!.params.id,
               offsetY,
             });
           }}
@@ -578,9 +653,11 @@ function EventPopover({
           <Button size="sm" onClick={save} disabled={saving} className="flex-1">
             {saving ? "Salvando…" : "Salvar"}
           </Button>
-          <Button asChild size="sm" variant="outline" className="flex-1">
-            <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
-          </Button>
+          {ev.link && (
+            <Button asChild size="sm" variant="outline" className="flex-1">
+              <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+            </Button>
+          )}
         </div>
         <AlertDialog>
           <AlertDialogTrigger asChild>

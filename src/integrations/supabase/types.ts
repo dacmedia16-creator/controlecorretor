@@ -182,6 +182,44 @@ export type Database = {
         }
         Relationships: []
       }
+      google_calendar_events: {
+        Row: {
+          calendar_id: string
+          connection_id: string
+          created_at: string
+          google_event_id: string
+          id: string
+          interaction_id: string
+          updated_at: string
+        }
+        Insert: {
+          calendar_id: string
+          connection_id: string
+          created_at?: string
+          google_event_id: string
+          id?: string
+          interaction_id: string
+          updated_at?: string
+        }
+        Update: {
+          calendar_id?: string
+          connection_id?: string
+          created_at?: string
+          google_event_id?: string
+          id?: string
+          interaction_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_calendar_events_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "user_google_calendar_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kanban_statuses: {
         Row: {
           active: boolean
@@ -500,7 +538,10 @@ export type Database = {
           created_at: string
           expires_at: string
           google_email: string
+          id: string
           refresh_token: string
+          sync_in: boolean
+          sync_out: boolean
           updated_at: string
           user_id: string
         }
@@ -510,7 +551,10 @@ export type Database = {
           created_at?: string
           expires_at: string
           google_email: string
+          id?: string
           refresh_token: string
+          sync_in?: boolean
+          sync_out?: boolean
           updated_at?: string
           user_id: string
         }
@@ -520,7 +564,10 @@ export type Database = {
           created_at?: string
           expires_at?: string
           google_email?: string
+          id?: string
           refresh_token?: string
+          sync_in?: boolean
+          sync_out?: boolean
           updated_at?: string
           user_id?: string
         }

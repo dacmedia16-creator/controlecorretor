@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/userinfo.email",
   "openid",
 ].join(" ");
@@ -74,10 +75,12 @@ export async function exchangeCodeAndStore(code: string, state: string): Promise
   const userInfo = await userInfoRes.json() as { email: string };
 
   const expiresAt = new Date(Date.now() + (tokens.expires_in - 60) * 1000).toISOString();
+  // Conexão por (usuário do app + conta Google) — permite várias contas Google.
   const existing = await supabaseAdmin
     .from("user_google_calendar_connections")
     .select("refresh_token")
     .eq("user_id", uid)
+    .eq("google_email", userInfo.email)
     .maybeSingle();
   const refreshToken = tokens.refresh_token ?? existing.data?.refresh_token;
   if (!refreshToken) {
@@ -92,7 +95,7 @@ export async function exchangeCodeAndStore(code: string, state: string): Promise
       access_token: tokens.access_token,
       refresh_token: refreshToken,
       expires_at: expiresAt,
-    }, { onConflict: "user_id" });
+    }, { onConflict: "user_id,google_email" });
   if (error) throw new Error(`Save failed: ${error.message}`);
   return { uid };
 }
@@ -100,16 +103,57 @@ export async function exchangeCodeAndStore(code: string, state: string): Promise
 export const GCAL_RECONNECT_ERROR =
   "GCAL_RECONNECT: Sua conexão com o Google Calendar expirou. Reconecte na página de Recrutamento.";
 
-export async function getFreshAccessToken(userId: string): Promise<string> {
+export type GcalConnection = {
+  id: string;
+  user_id: string;
+  google_email: string;
+  access_token: string;
+  refresh_token: string;
+  expires_at: string;
+  calendar_ids: string[] | null;
+  sync_out: boolean;
+  sync_in: boolean;
+};
+
+const CONNECTION_COLUMNS =
+  "id,user_id,google_email,access_token,refresh_token,expires_at,calendar_ids,sync_out,sync_in";
+
+export async function listConnections(
+  userId: string,
+  filter?: { syncOut?: boolean; syncIn?: boolean },
+): Promise<GcalConnection[]> {
+  let q = supabaseAdmin
+    .from("user_google_calendar_connections")
+    .select(CONNECTION_COLUMNS)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (filter?.syncOut) q = q.eq("sync_out", true);
+  if (filter?.syncIn) q = q.eq("sync_in", true);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GcalConnection[];
+}
+
+export async function getConnection(userId: string, connectionId: string): Promise<GcalConnection> {
   const { data, error } = await supabaseAdmin
     .from("user_google_calendar_connections")
-    .select("access_token,refresh_token,expires_at")
+    .select(CONNECTION_COLUMNS)
     .eq("user_id", userId)
+    .eq("id", connectionId)
     .maybeSingle();
-  if (error || !data) throw new Error("Google Calendar não conectado");
+  if (error || !data) throw new Error("Conexão do Google Calendar não encontrada");
+  return data as GcalConnection;
+}
 
-  const expiresAt = new Date(data.expires_at).getTime();
-  if (Date.now() < expiresAt - 60_000) return data.access_token;
+export function connectionCalendarIds(conn: GcalConnection): string[] {
+  const ids = (conn.calendar_ids ?? []).filter(Boolean);
+  return ids.length > 0 ? ids : ["primary"];
+}
+
+/** Token válido para uma conexão específica (renova e persiste quando necessário). */
+export async function freshTokenFor(conn: GcalConnection): Promise<string> {
+  const expiresAt = new Date(conn.expires_at).getTime();
+  if (Date.now() < expiresAt - 60_000) return conn.access_token;
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -117,38 +161,39 @@ export async function getFreshAccessToken(userId: string): Promise<string> {
     body: new URLSearchParams({
       client_id: process.env.GOOGLE_OAUTH_CLIENT_ID!,
       client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET!,
-      refresh_token: data.refresh_token,
+      refresh_token: conn.refresh_token,
       grant_type: "refresh_token",
     }),
   });
   if (!tokenRes.ok) {
     const t = await tokenRes.text();
     if (t.includes("invalid_grant")) {
-      // Refresh token revogado/expirado — remove a conexão morta para o app pedir reconexão.
       await supabaseAdmin
         .from("user_google_calendar_connections")
         .delete()
-        .eq("user_id", userId);
+        .eq("id", conn.id);
       throw new Error(GCAL_RECONNECT_ERROR);
     }
     throw new Error(`Refresh falhou: ${tokenRes.status} ${t}`);
   }
   const refreshed = await tokenRes.json() as { access_token: string; expires_in: number };
-
   const newExpiresAt = new Date(Date.now() + (refreshed.expires_in - 60) * 1000).toISOString();
   await supabaseAdmin
     .from("user_google_calendar_connections")
     .update({ access_token: refreshed.access_token, expires_at: newExpiresAt })
-    .eq("user_id", userId);
+    .eq("id", conn.id);
   return refreshed.access_token;
 }
 
+/** Compat: token da primeira conexão do usuário. */
+export async function getFreshAccessToken(userId: string): Promise<string> {
+  const conns = await listConnections(userId);
+  if (conns.length === 0) throw new Error("Google Calendar não conectado");
+  return freshTokenFor(conns[0]);
+}
+
 export async function getTargetCalendarIds(userId: string): Promise<string[]> {
-  const { data } = await supabaseAdmin
-    .from("user_google_calendar_connections")
-    .select("calendar_ids")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const ids = (data?.calendar_ids ?? []).filter(Boolean);
-  return ids.length > 0 ? ids : ["primary"];
+  const conns = await listConnections(userId);
+  if (conns.length === 0) return ["primary"];
+  return connectionCalendarIds(conns[0]);
 }

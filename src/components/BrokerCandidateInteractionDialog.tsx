@@ -73,13 +73,13 @@ export function BrokerCandidateInteractionDialog({
       const prefix = `Entrevista agendada para ${formatted}`;
       finalNotes = finalNotes ? `${prefix}\n${finalNotes}` : prefix;
     }
-    const { error } = await supabase.from("broker_candidate_interactions").insert({
+    const { data: inserted, error } = await supabase.from("broker_candidate_interactions").insert({
       candidate_id: candidateId,
       user_id: user.id,
       interaction_type: type,
       notes: finalNotes || null,
       next_follow_up_date: followUp ? new Date(followUp).toISOString() : null,
-    });
+    }).select("id").maybeSingle();
     if (error) {
       setSaving(false);
       toast.error(error.message);
@@ -91,6 +91,7 @@ export function BrokerCandidateInteractionDialog({
         const result = await createEvent({
           data: {
             candidateId,
+            interactionId: inserted?.id ?? undefined,
             startISO: new Date(followUp).toISOString(),
             durationMinutes: durationMin,
             inviteCandidate: true,

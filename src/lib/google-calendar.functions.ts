@@ -7,8 +7,11 @@ import {
   callbackRedirectUri,
   signState,
   newNonce,
-  getFreshAccessToken,
-  getTargetCalendarIds,
+  listConnections,
+  getConnection,
+  connectionCalendarIds,
+  freshTokenFor,
+  type GcalConnection,
 } from "./google-calendar.server";
 
 export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
@@ -31,7 +34,8 @@ export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
       scope: GOOGLE_CALENDAR_SCOPES,
       access_type: "offline",
       include_granted_scopes: "true",
-      prompt: "consent",
+      // select_account permite conectar uma segunda conta (ex.: RE/MAX).
+      prompt: "consent select_account",
       state,
     });
     return { authorizationUrl: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` };
@@ -40,22 +44,38 @@ export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
 export const getMyGoogleCalendarStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data } = await supabaseAdmin
-      .from("user_google_calendar_connections")
-      .select("google_email,calendar_ids")
-      .eq("user_id", context.userId)
-      .maybeSingle();
+    const conns = await listConnections(context.userId);
+    const writable = conns.filter((c) => c.sync_out);
+    const first = writable[0] ?? conns[0] ?? null;
     return {
-      connected: !!data,
-      google_email: data?.google_email ?? null,
-      calendar_ids: data?.calendar_ids?.length ? data.calendar_ids : ["primary"],
+      connected: writable.length > 0,
+      accountsCount: conns.length,
+      google_email: first?.google_email ?? null,
+      calendar_ids: first ? connectionCalendarIds(first) : ["primary"],
     };
   });
 
-export const listMyGoogleCalendars = createServerFn({ method: "GET" })
+export const listMyGoogleConnections = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const accessToken = await getFreshAccessToken(context.userId);
+    const conns = await listConnections(context.userId);
+    return {
+      connections: conns.map((c) => ({
+        id: c.id,
+        google_email: c.google_email,
+        calendar_ids: connectionCalendarIds(c),
+        sync_out: c.sync_out,
+        sync_in: c.sync_in,
+      })),
+    };
+  });
+
+export const listMyGoogleCalendars = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ connectionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const conn = await getConnection(context.userId, data.connectionId);
+    const accessToken = await freshTokenFor(conn);
     const res = await fetch(
       "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer&maxResults=100",
       { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -65,7 +85,7 @@ export const listMyGoogleCalendars = createServerFn({ method: "GET" })
       throw new Error(`Google Calendar API ${res.status}: ${t}`);
     }
     const json = await res.json() as {
-      items?: Array<{ id: string; summary?: string; primary?: boolean; accessRole?: string }>;
+      items?: Array<{ id: string; summary?: string; primary?: boolean }>;
     };
     const calendars = (json.items ?? []).map((c) => ({
       id: c.primary ? "primary" : c.id,
@@ -76,19 +96,40 @@ export const listMyGoogleCalendars = createServerFn({ method: "GET" })
     return { calendars };
   });
 
-export const setMyGoogleCalendars = createServerFn({ method: "POST" })
+export const setConnectionPrefs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
-    calendarIds: z.array(z.string().min(1)).max(10),
+    connectionId: z.string().uuid(),
+    calendarIds: z.array(z.string().min(1)).max(20).optional(),
+    syncOut: z.boolean().optional(),
+    syncIn: z.boolean().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const ids = data.calendarIds.length > 0 ? data.calendarIds : ["primary"];
+    const patch: { calendar_ids?: string[]; sync_out?: boolean; sync_in?: boolean } = {};
+    if (data.calendarIds) patch.calendar_ids = data.calendarIds.length > 0 ? data.calendarIds : ["primary"];
+    if (data.syncOut !== undefined) patch.sync_out = data.syncOut;
+    if (data.syncIn !== undefined) patch.sync_in = data.syncIn;
+    if (Object.keys(patch).length === 0) return { ok: true };
     const { error } = await supabaseAdmin
       .from("user_google_calendar_connections")
-      .update({ calendar_ids: ids })
+      .update(patch)
+      .eq("id", data.connectionId)
       .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
-    return { calendar_ids: ids };
+    return { ok: true };
+  });
+
+export const disconnectGoogleConnection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ connectionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await supabaseAdmin
+      .from("user_google_calendar_connections")
+      .delete()
+      .eq("id", data.connectionId)
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
@@ -99,6 +140,90 @@ export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
       .delete()
       .eq("user_id", context.userId);
     return { ok: true };
+  });
+
+/** Busca eventos da semana em todas as contas marcadas para leitura. */
+export const listGoogleEventsRange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    startISO: z.string().min(1),
+    endISO: z.string().min(1),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const conns = await listConnections(context.userId, { syncIn: true });
+    const events: Array<{
+      id: string;
+      accountEmail: string;
+      calendarId: string;
+      title: string;
+      startISO: string;
+      endISO: string | null;
+      allDay: boolean;
+      htmlLink: string | null;
+      location: string | null;
+      description: string | null;
+    }> = [];
+    const failures: string[] = [];
+
+    for (const conn of conns) {
+      let accessToken: string;
+      try {
+        accessToken = await freshTokenFor(conn);
+      } catch (err) {
+        failures.push(`${conn.google_email}: ${(err as Error).message}`);
+        continue;
+      }
+      for (const calendarId of connectionCalendarIds(conn)) {
+        try {
+          const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?` +
+            new URLSearchParams({
+              timeMin: data.startISO,
+              timeMax: data.endISO,
+              singleEvents: "true",
+              orderBy: "startTime",
+              maxResults: "250",
+            }).toString();
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (!res.ok) {
+            failures.push(`${conn.google_email}/${calendarId}: ${res.status} ${await res.text()}`);
+            continue;
+          }
+          const json = await res.json() as {
+            items?: Array<{
+              id: string;
+              summary?: string;
+              status?: string;
+              htmlLink?: string;
+              location?: string;
+              description?: string;
+              start?: { dateTime?: string; date?: string };
+              end?: { dateTime?: string; date?: string };
+            }>;
+          };
+          for (const it of json.items ?? []) {
+            if (it.status === "cancelled") continue;
+            const startISO = it.start?.dateTime ?? (it.start?.date ? `${it.start.date}T00:00:00` : null);
+            if (!startISO) continue;
+            events.push({
+              id: `${conn.id}:${calendarId}:${it.id}`,
+              accountEmail: conn.google_email,
+              calendarId,
+              title: it.summary ?? "(sem título)",
+              startISO,
+              endISO: it.end?.dateTime ?? null,
+              allDay: !it.start?.dateTime,
+              htmlLink: it.htmlLink ?? null,
+              location: it.location ?? null,
+              description: it.description ?? null,
+            });
+          }
+        } catch (err) {
+          failures.push(`${conn.google_email}/${calendarId}: ${(err as Error).message}`);
+        }
+      }
+    }
+
+    return { events, failures, accounts: conns.length };
   });
 
 async function findEventId(
@@ -127,18 +252,43 @@ async function findEventId(
   return match?.id ?? null;
 }
 
+/** Eventos rastreados de uma interação: [connectionId+calendarId] -> googleEventId */
+async function trackedEvents(interactionId: string) {
+  const { data } = await supabaseAdmin
+    .from("google_calendar_events")
+    .select("connection_id,calendar_id,google_event_id")
+    .eq("interaction_id", interactionId);
+  const map = new Map<string, string>();
+  for (const row of data ?? []) map.set(`${row.connection_id}|${row.calendar_id}`, row.google_event_id);
+  return map;
+}
+
+async function resolveEventId(
+  conn: GcalConnection,
+  calendarId: string,
+  accessToken: string,
+  tracked: Map<string, string>,
+  candidateName: string,
+  startISO: string,
+): Promise<string | null> {
+  const known = tracked.get(`${conn.id}|${calendarId}`);
+  if (known) return known;
+  return findEventId(accessToken, calendarId, candidateName, startISO);
+}
+
 export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
     candidateId: z.string().uuid(),
+    interactionId: z.string().uuid().optional(),
     startISO: z.string().min(1),
     durationMinutes: z.number().int().min(5).max(480),
     inviteCandidate: z.boolean().default(true),
     extraNotes: z.string().max(2000).optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const accessToken = await getFreshAccessToken(context.userId);
-    const calendarIds = await getTargetCalendarIds(context.userId);
+    const conns = await listConnections(context.userId, { syncOut: true });
+    if (conns.length === 0) throw new Error("Google Calendar não conectado");
 
     const { data: cand, error: candErr } = await supabaseAdmin
       .from("broker_candidates")
@@ -168,37 +318,64 @@ export const createGoogleCalendarEvent = createServerFn({ method: "POST" })
     };
 
     let first: { id: string; htmlLink: string } | null = null;
+    let createdCount = 0;
     const failures: string[] = [];
+    const tracking: Array<{
+      interaction_id: string; connection_id: string; calendar_id: string; google_event_id: string;
+    }> = [];
+    let isFirstTarget = true;
 
-    for (const [index, calendarId] of calendarIds.entries()) {
-      // Convite ao candidato só no primeiro calendário, para não duplicar e-mails.
-      const sendUpdates = attendees.length > 0 && index === 0 ? "all" : "none";
-      const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=${sendUpdates}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        },
-      );
-      if (!res.ok) {
-        failures.push(`${calendarId}: ${res.status} ${await res.text()}`);
+    for (const conn of conns) {
+      let accessToken: string;
+      try {
+        accessToken = await freshTokenFor(conn);
+      } catch (err) {
+        failures.push(`${conn.google_email}: ${(err as Error).message}`);
         continue;
       }
-      const created = await res.json() as { id: string; htmlLink: string };
-      if (!first) first = created;
+      for (const calendarId of connectionCalendarIds(conn)) {
+        // Convite ao candidato apenas no primeiro destino, para não duplicar e-mails.
+        const sendUpdates = attendees.length > 0 && isFirstTarget ? "all" : "none";
+        isFirstTarget = false;
+        const res = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=${sendUpdates}`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+        );
+        if (!res.ok) {
+          failures.push(`${conn.google_email}/${calendarId}: ${res.status} ${await res.text()}`);
+          continue;
+        }
+        const created = await res.json() as { id: string; htmlLink: string };
+        createdCount++;
+        if (!first) first = created;
+        if (data.interactionId) {
+          tracking.push({
+            interaction_id: data.interactionId,
+            connection_id: conn.id,
+            calendar_id: calendarId,
+            google_event_id: created.id,
+          });
+        }
+      }
     }
 
     if (!first) throw new Error(`Google Calendar falhou — ${failures.join(" | ")}`);
+
+    if (tracking.length > 0) {
+      await supabaseAdmin
+        .from("google_calendar_events")
+        .upsert(tracking, { onConflict: "interaction_id,connection_id,calendar_id" });
+    }
 
     return {
       eventId: first.id,
       htmlLink: first.htmlLink,
       invited: attendees.length > 0,
-      calendarsCreated: calendarIds.length - failures.length,
+      calendarsCreated: createdCount,
       failures,
     };
   });
@@ -207,13 +384,14 @@ export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
     candidateId: z.string().uuid(),
+    interactionId: z.string().uuid().optional(),
     oldStartISO: z.string().min(1),
     newStartISO: z.string().min(1),
     durationMinutes: z.number().int().min(5).max(480).default(30),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const accessToken = await getFreshAccessToken(context.userId);
-    const calendarIds = await getTargetCalendarIds(context.userId);
+    const conns = await listConnections(context.userId, { syncOut: true });
+    if (conns.length === 0) throw new Error("Google Calendar não conectado");
 
     const { data: cand } = await supabaseAdmin
       .from("broker_candidates")
@@ -222,38 +400,47 @@ export const updateGoogleCalendarEvent = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!cand) throw new Error("Candidato não encontrado");
 
+    const tracked = data.interactionId ? await trackedEvents(data.interactionId) : new Map<string, string>();
     const newStart = new Date(data.newStartISO);
     const newEnd = new Date(newStart.getTime() + data.durationMinutes * 60_000);
 
     let updatedCount = 0;
     const failures: string[] = [];
+    let isFirstTarget = true;
 
-    for (const [index, calendarId] of calendarIds.entries()) {
+    for (const conn of conns) {
+      let accessToken: string;
       try {
-        const eventId = await findEventId(accessToken, calendarId, cand.name, data.oldStartISO);
-        if (!eventId) continue;
-        const sendUpdates = index === 0 ? "all" : "none";
-        const patchRes = await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}?sendUpdates=${sendUpdates}`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              start: { dateTime: newStart.toISOString(), timeZone: "America/Sao_Paulo" },
-              end: { dateTime: newEnd.toISOString(), timeZone: "America/Sao_Paulo" },
-            }),
-          },
-        );
-        if (!patchRes.ok) {
-          failures.push(`${calendarId}: ${patchRes.status} ${await patchRes.text()}`);
-          continue;
-        }
-        updatedCount++;
+        accessToken = await freshTokenFor(conn);
       } catch (err) {
-        failures.push(`${calendarId}: ${(err as Error).message}`);
+        failures.push(`${conn.google_email}: ${(err as Error).message}`);
+        continue;
+      }
+      for (const calendarId of connectionCalendarIds(conn)) {
+        const sendUpdates = isFirstTarget ? "all" : "none";
+        isFirstTarget = false;
+        try {
+          const eventId = await resolveEventId(conn, calendarId, accessToken, tracked, cand.name, data.oldStartISO);
+          if (!eventId) continue;
+          const patchRes = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}?sendUpdates=${sendUpdates}`,
+            {
+              method: "PATCH",
+              headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                start: { dateTime: newStart.toISOString(), timeZone: "America/Sao_Paulo" },
+                end: { dateTime: newEnd.toISOString(), timeZone: "America/Sao_Paulo" },
+              }),
+            },
+          );
+          if (!patchRes.ok) {
+            failures.push(`${conn.google_email}/${calendarId}: ${patchRes.status} ${await patchRes.text()}`);
+            continue;
+          }
+          updatedCount++;
+        } catch (err) {
+          failures.push(`${conn.google_email}/${calendarId}: ${(err as Error).message}`);
+        }
       }
     }
 
@@ -267,11 +454,12 @@ export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
     candidateId: z.string().uuid(),
+    interactionId: z.string().uuid().optional(),
     startISO: z.string().min(1),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const accessToken = await getFreshAccessToken(context.userId);
-    const calendarIds = await getTargetCalendarIds(context.userId);
+    const conns = await listConnections(context.userId, { syncOut: true });
+    if (conns.length === 0) throw new Error("Google Calendar não conectado");
 
     const { data: cand } = await supabaseAdmin
       .from("broker_candidates")
@@ -280,26 +468,42 @@ export const deleteGoogleCalendarEvent = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!cand) throw new Error("Candidato não encontrado");
 
+    const tracked = data.interactionId ? await trackedEvents(data.interactionId) : new Map<string, string>();
     let deletedCount = 0;
     const failures: string[] = [];
+    let isFirstTarget = true;
 
-    for (const [index, calendarId] of calendarIds.entries()) {
+    for (const conn of conns) {
+      let accessToken: string;
       try {
-        const eventId = await findEventId(accessToken, calendarId, cand.name, data.startISO);
-        if (!eventId) continue;
-        const sendUpdates = index === 0 ? "all" : "none";
-        const delRes = await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}?sendUpdates=${sendUpdates}`,
-          { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
-        );
-        if (!delRes.ok && delRes.status !== 410) {
-          failures.push(`${calendarId}: ${delRes.status} ${await delRes.text()}`);
-          continue;
-        }
-        deletedCount++;
+        accessToken = await freshTokenFor(conn);
       } catch (err) {
-        failures.push(`${calendarId}: ${(err as Error).message}`);
+        failures.push(`${conn.google_email}: ${(err as Error).message}`);
+        continue;
       }
+      for (const calendarId of connectionCalendarIds(conn)) {
+        const sendUpdates = isFirstTarget ? "all" : "none";
+        isFirstTarget = false;
+        try {
+          const eventId = await resolveEventId(conn, calendarId, accessToken, tracked, cand.name, data.startISO);
+          if (!eventId) continue;
+          const delRes = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}?sendUpdates=${sendUpdates}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+          if (!delRes.ok && delRes.status !== 410) {
+            failures.push(`${conn.google_email}/${calendarId}: ${delRes.status} ${await delRes.text()}`);
+            continue;
+          }
+          deletedCount++;
+        } catch (err) {
+          failures.push(`${conn.google_email}/${calendarId}: ${(err as Error).message}`);
+        }
+      }
+    }
+
+    if (data.interactionId && deletedCount > 0) {
+      await supabaseAdmin.from("google_calendar_events").delete().eq("interaction_id", data.interactionId);
     }
 
     if (deletedCount === 0 && failures.length > 0) {
