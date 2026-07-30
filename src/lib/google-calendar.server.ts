@@ -118,16 +118,111 @@ export type GcalConnection = {
   id: string;
   user_id: string;
   google_email: string;
-  access_token: string;
-  refresh_token: string;
-  expires_at: string;
+  access_token: string | null;
+  refresh_token: string | null;
+  expires_at: string | null;
   calendar_ids: string[] | null;
   sync_out: boolean;
   sync_in: boolean;
+  auth_type: "oauth" | "service_account";
+  service_account_email: string | null;
+  display_name: string | null;
 };
 
 const CONNECTION_COLUMNS =
-  "id,user_id,google_email,access_token,refresh_token,expires_at,calendar_ids,sync_out,sync_in";
+  "id,user_id,google_email,access_token,refresh_token,expires_at,calendar_ids,sync_out,sync_in,auth_type,service_account_email,display_name";
+
+// ---------- Conta de serviço (Service Account) ----------
+
+type ServiceAccountKey = { client_email: string; private_key: string };
+
+export function serviceAccountKey(): ServiceAccountKey {
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!raw || !raw.trim()) {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON não configurado no backend.");
+  }
+  let parsed: Partial<ServiceAccountKey> & { type?: string };
+  try {
+    parsed = JSON.parse(raw.trim());
+  } catch {
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_JSON inválido: cole o conteúdo completo do arquivo JSON da chave da conta de serviço.",
+    );
+  }
+  if (!parsed.client_email || !parsed.private_key) {
+    throw new Error(
+      "GOOGLE_SERVICE_ACCOUNT_JSON incompleto: faltam os campos client_email e/ou private_key.",
+    );
+  }
+  return {
+    client_email: parsed.client_email,
+    private_key: parsed.private_key.replace(/\\n/g, "\n"),
+  };
+}
+
+function b64url(input: string | Uint8Array): string {
+  const buf = typeof input === "string" ? Buffer.from(input, "utf8") : Buffer.from(input);
+  return buf.toString("base64url");
+}
+
+function pemToPkcs8(pem: string): ArrayBuffer {
+  const body = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
+    .replace(/\s+/g, "");
+  const bytes = Buffer.from(body, "base64");
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+let saTokenCache: { token: string; exp: number } | null = null;
+
+/** Access token da conta de serviço (JWT assinado com WebCrypto RS256). */
+export async function serviceAccountToken(): Promise<string> {
+  if (saTokenCache && Date.now() < saTokenCache.exp) return saTokenCache.token;
+
+  const { client_email, private_key } = serviceAccountKey();
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claims = b64url(JSON.stringify({
+    iss: client_email,
+    scope: "https://www.googleapis.com/auth/calendar",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  }));
+  const signingInput = `${header}.${claims}`;
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToPkcs8(private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(signingInput),
+  );
+  const assertion = `${signingInput}.${b64url(new Uint8Array(signature))}`;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Falha ao autenticar a conta de serviço do Google: ${res.status} ${t}`);
+  }
+  const json = await res.json() as { access_token: string; expires_in: number };
+  saTokenCache = { token: json.access_token, exp: Date.now() + (json.expires_in - 300) * 1000 };
+  return json.access_token;
+}
+
 
 export async function listConnections(
   userId: string,
@@ -163,8 +258,11 @@ export function connectionCalendarIds(conn: GcalConnection): string[] {
 
 /** Token válido para uma conexão específica (renova e persiste quando necessário). */
 export async function freshTokenFor(conn: GcalConnection): Promise<string> {
-  const expiresAt = new Date(conn.expires_at).getTime();
-  if (Date.now() < expiresAt - 60_000) return conn.access_token;
+  if (conn.auth_type === "service_account") return serviceAccountToken();
+
+  const expiresAt = conn.expires_at ? new Date(conn.expires_at).getTime() : 0;
+  if (conn.access_token && Date.now() < expiresAt - 60_000) return conn.access_token;
+  if (!conn.refresh_token) throw new Error(GCAL_RECONNECT_ERROR);
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -176,6 +274,7 @@ export async function freshTokenFor(conn: GcalConnection): Promise<string> {
       grant_type: "refresh_token",
     }),
   });
+
   if (!tokenRes.ok) {
     const t = await tokenRes.text();
     if (t.includes("invalid_grant")) {

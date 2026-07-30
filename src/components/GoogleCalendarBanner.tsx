@@ -6,9 +6,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, CheckCircle2, Loader2, Plus } from "lucide-react";
+import { Calendar, CheckCircle2, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { gcalErrorMessage } from "@/lib/gcal-error";
+import { ServiceCalendarDialog } from "@/components/ServiceCalendarDialog";
 import {
   startGoogleCalendarConnect,
   listMyGoogleConnections,
@@ -23,7 +24,11 @@ type ConnectionRow = {
   calendar_ids: string[];
   sync_out: boolean;
   sync_in: boolean;
+  auth_type?: string;
+  display_name?: string | null;
+  service_account_email?: string | null;
 };
+
 
 export function GoogleCalendarBanner() {
   const qc = useQueryClient();
@@ -51,6 +56,8 @@ export function GoogleCalendarBanner() {
     }
   }, [search.gcal, search.reason, qc, navigate]);
 
+  const [serviceOpen, setServiceOpen] = useState(false);
+
   const connectMut = useMutation({
     mutationFn: async () => {
       const returnPath = typeof window !== "undefined" ? window.location.pathname : undefined;
@@ -63,6 +70,8 @@ export function GoogleCalendarBanner() {
   if (!data) return null;
   const connections = data.connections as ConnectionRow[];
 
+  const serviceDialog = <ServiceCalendarDialog open={serviceOpen} onOpenChange={setServiceOpen} />;
+
   if (connections.length === 0) {
     return (
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3 border-primary/30 bg-primary/5">
@@ -70,9 +79,15 @@ export function GoogleCalendarBanner() {
           <Calendar className="size-4 text-primary" />
           <span>Conecte uma conta Google para sincronizar as entrevistas com o Google Agenda.</span>
         </div>
-        <Button size="sm" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
-          {connectMut.isPending ? "Redirecionando…" : "Conectar Google Calendar"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
+            {connectMut.isPending ? "Redirecionando…" : "Conectar Google Calendar"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setServiceOpen(true)}>
+            <ShieldCheck className="size-4" /> Agenda de serviço
+          </Button>
+        </div>
+        {serviceDialog}
       </Card>
     );
   }
@@ -84,15 +99,22 @@ export function GoogleCalendarBanner() {
           <CheckCircle2 className="size-4 text-green-600" />
           Contas Google conectadas ({connections.length})
         </div>
-        <Button size="sm" variant="outline" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
-          <Plus className="size-4" /> Conectar outra conta
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
+            <Plus className="size-4" /> Conectar outra conta
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setServiceOpen(true)}>
+            <ShieldCheck className="size-4" /> Conectar agenda de serviço
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-2">
         {connections.map((c) => <ConnectionCard key={c.id} conn={c} />)}
       </div>
+      {serviceDialog}
     </Card>
+
   );
 }
 
@@ -138,7 +160,17 @@ function ConnectionCard({ conn }: { conn: ConnectionRow }) {
   return (
     <div className="rounded-md border bg-background p-3 space-y-2">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-        <div className="min-w-0 truncate text-sm font-medium">{conn.google_email}</div>
+        <div className="min-w-0 space-y-0.5">
+          <div className="truncate text-sm font-medium">
+            {conn.display_name || conn.google_email}
+          </div>
+          {conn.auth_type === "service_account" && (
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <ShieldCheck className="size-3" /> Conta de serviço · {conn.google_email}
+            </div>
+          )}
+        </div>
+
         <div className="flex shrink-0 gap-2">
           <Button size="sm" variant="outline" onClick={() => setShowPicker((v) => !v)}>
             {showPicker ? "Ocultar" : `Calendários (${selected.length})`}
