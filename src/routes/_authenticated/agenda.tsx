@@ -40,8 +40,17 @@ type AgendaEvent = {
   phone: string | null;
   notes: string | null;
   link: { to: "/recrutamento/$id" | "/leads/$id"; params: { id: string } } | null;
-  /** eventos vindos do Google (somente leitura) */
-  google?: { accountEmail: string; htmlLink: string | null; allDay: boolean; endISO: string | null };
+  /** eventos vindos do Google (editáveis diretamente na agenda) */
+  google?: {
+    accountEmail: string;
+    htmlLink: string | null;
+    allDay: boolean;
+    endISO: string | null;
+    connectionId: string;
+    calendarId: string;
+    eventId: string;
+  };
+
 };
 
 const HOUR_START = 7;
