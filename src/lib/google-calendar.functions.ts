@@ -16,6 +16,9 @@ import {
   logSync,
   runWriteTest,
   recentSyncLog,
+  listPendingInterviews,
+  syncNextPendingInterview,
+
   type GcalConnection,
 } from "./google-calendar.server";
 
