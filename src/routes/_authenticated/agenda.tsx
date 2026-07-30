@@ -170,7 +170,10 @@ function AgendaPage() {
     },
   });
 
+  const events = useMemo(() => [...localEvents, ...googleEvents], [localEvents, googleEvents]);
+
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
 
   // amplia a faixa de horas quando existem compromissos fora do padrão
   const [hourStart, hourEnd] = useMemo(() => {
