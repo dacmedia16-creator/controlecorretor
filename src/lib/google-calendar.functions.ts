@@ -677,3 +677,16 @@ export const listGoogleSyncLog = createServerFn({ method: "POST" })
     const entries = await recentSyncLog(context.userId, data?.limit ?? 15);
     return { entries };
   });
+
+/** Entrevistas futuras que ainda não foram criadas no Google Agenda. */
+export const listPendingInterviewSync = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const pending = await listPendingInterviews(context.userId, 20);
+    return { count: pending.length, pending };
+  });
+
+/** Reenvia a próxima entrevista pendente para as agendas com envio ligado. */
+export const syncNextPendingInterviewFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => syncNextPendingInterview(context.userId));
