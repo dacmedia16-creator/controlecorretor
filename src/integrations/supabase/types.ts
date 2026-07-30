@@ -533,39 +533,48 @@ export type Database = {
       }
       user_google_calendar_connections: {
         Row: {
-          access_token: string
+          access_token: string | null
+          auth_type: string
           calendar_ids: string[]
           created_at: string
-          expires_at: string
+          display_name: string | null
+          expires_at: string | null
           google_email: string
           id: string
-          refresh_token: string
+          refresh_token: string | null
+          service_account_email: string | null
           sync_in: boolean
           sync_out: boolean
           updated_at: string
           user_id: string
         }
         Insert: {
-          access_token: string
+          access_token?: string | null
+          auth_type?: string
           calendar_ids?: string[]
           created_at?: string
-          expires_at: string
+          display_name?: string | null
+          expires_at?: string | null
           google_email: string
           id?: string
-          refresh_token: string
+          refresh_token?: string | null
+          service_account_email?: string | null
           sync_in?: boolean
           sync_out?: boolean
           updated_at?: string
           user_id: string
         }
         Update: {
-          access_token?: string
+          access_token?: string | null
+          auth_type?: string
           calendar_ids?: string[]
           created_at?: string
-          expires_at?: string
+          display_name?: string | null
+          expires_at?: string | null
           google_email?: string
           id?: string
-          refresh_token?: string
+          refresh_token?: string | null
+          service_account_email?: string | null
           sync_in?: boolean
           sync_out?: boolean
           updated_at?: string
