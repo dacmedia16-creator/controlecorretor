@@ -348,14 +348,23 @@ function AgendaPage() {
                 {ev.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
               </span>
               <span className="truncate">{ev.title}</span>
+              {ev.google && (
+                <span className="truncate text-xs text-muted-foreground">{ev.google.accountEmail}</span>
+              )}
               {ev.phone && (
                 <a href={whatsappUrl(ev.phone)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
                   <MessageCircle className="size-3" /> {ev.phone}
                 </a>
               )}
-              <Button asChild size="sm" variant="outline" className="ml-auto">
-                <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
-              </Button>
+              {ev.link ? (
+                <Button asChild size="sm" variant="outline" className="ml-auto">
+                  <Link to={ev.link.to} params={ev.link.params}>Abrir</Link>
+                </Button>
+              ) : ev.google?.htmlLink ? (
+                <Button asChild size="sm" variant="outline" className="ml-auto">
+                  <a href={ev.google.htmlLink} target="_blank" rel="noreferrer">Abrir no Google</a>
+                </Button>
+              ) : null}
             </div>
           ))}
           {!isLoading && events.length === 0 && (
