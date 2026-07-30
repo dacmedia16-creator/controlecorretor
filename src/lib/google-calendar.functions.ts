@@ -126,13 +126,30 @@ export const connectServiceCalendar = createServerFn({ method: "POST" })
     if (res.status === 404 || res.status === 403) {
       throw new Error(
         `A conta de serviço não tem acesso a "${data.calendarId}". No Google Agenda, abra as configurações desse calendário, ` +
-        `compartilhe com ${client_email} e escolha a permissão "Fazer alterações nos eventos".`,
+        `em "Compartilhado com" adicione ${client_email} e salve. Depois tente novamente.`,
       );
     }
     if (!res.ok) {
       throw new Error(`Google Calendar API ${res.status}: ${await res.text()}`);
     }
     const cal = await res.json() as { id: string; summary?: string };
+
+    // Descobre o nível de acesso: "writer"/"owner" permitem criar eventos;
+    // "reader"/"freeBusyReader" só permitem leitura (comum em organizações
+    // que restringem o compartilhamento externo de agendas).
+    let writable = false;
+    try {
+      const listRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/users/me/calendarList/${encodeURIComponent(cal.id)}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (listRes.ok) {
+        const entry = await listRes.json() as { accessRole?: string };
+        writable = entry.accessRole === "writer" || entry.accessRole === "owner";
+      }
+    } catch {
+      writable = false;
+    }
 
     const { error } = await supabaseAdmin
       .from("user_google_calendar_connections")
@@ -143,12 +160,14 @@ export const connectServiceCalendar = createServerFn({ method: "POST" })
         service_account_email: client_email,
         display_name: data.displayName?.trim() || cal.summary || cal.id,
         calendar_ids: [cal.id],
+        sync_in: true,
+        sync_out: writable,
         access_token: null,
         refresh_token: null,
         expires_at: null,
       }, { onConflict: "user_id,google_email" });
     if (error) throw new Error(error.message);
-    return { ok: true, calendarName: cal.summary ?? cal.id };
+    return { ok: true, calendarName: cal.summary ?? cal.id, writable };
   });
 
 
