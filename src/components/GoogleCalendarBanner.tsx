@@ -160,7 +160,17 @@ function ConnectionCard({ conn }: { conn: ConnectionRow }) {
   return (
     <div className="rounded-md border bg-background p-3 space-y-2">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-        <div className="min-w-0 truncate text-sm font-medium">{conn.google_email}</div>
+        <div className="min-w-0 space-y-0.5">
+          <div className="truncate text-sm font-medium">
+            {conn.display_name || conn.google_email}
+          </div>
+          {conn.auth_type === "service_account" && (
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <ShieldCheck className="size-3" /> Conta de serviço · {conn.google_email}
+            </div>
+          )}
+        </div>
+
         <div className="flex shrink-0 gap-2">
           <Button size="sm" variant="outline" onClick={() => setShowPicker((v) => !v)}>
             {showPicker ? "Ocultar" : `Calendários (${selected.length})`}
