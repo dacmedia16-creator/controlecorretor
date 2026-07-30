@@ -1,20 +1,37 @@
-## O que vou fazer
+## Diagnóstico confirmado
 
-Adicionar, no bloco de diagnóstico da tela **Agenda**, um botão **"Sincronizar agora"** ao lado de "Testar envio".
+O envio está sendo bloqueado por uma incompatibilidade de usuário:
 
-Comportamento:
+- A agenda **Denis Souza** está conectada ao usuário administrador `dacmedia16@gmail.com`, com envio e recebimento ativos.
+- As 6 entrevistas futuras pertencem à recrutadora `nicole@gmail.com`.
+- O código atual busca **entrevistas e conexão Google pelo mesmo usuário logado**.
+- Assim, o administrador encontra a agenda, mas nenhuma entrevista pendente; a recrutadora encontra as entrevistas, mas nenhuma agenda de envio.
+- O teste técnico da agenda retornou sucesso, porém não criou evento real e não estava ligado a nenhuma entrevista. Não há registros em `google_calendar_events` e não houve tentativas de criação nos logs.
 
-1. O sistema procura a **próxima entrevista pendente**: interação do tipo `entrevista` com data/hora futura que ainda **não tem evento registrado** no Google (sem linha correspondente em `google_calendar_events`).
-2. Cria o evento na agenda **Denis Souza** (`dacmedia16@gmail.com`) — e em qualquer outra agenda com envio ligado.
-3. Mostra o resultado: nome do candidato, data/hora e em qual agenda foi criado; se falhar, exibe o erro exato devolvido pelo Google (status + mensagem).
-4. Se não houver nada pendente, informa "Nenhuma entrevista pendente de envio".
-5. Toda tentativa fica gravada em **Últimas sincronizações**, como já acontece hoje.
+## Implementação
 
-O botão mostra também **quantas entrevistas estão pendentes**, para você saber se vale clicar de novo (cada clique envia a próxima). Se você preferir enviar todas de uma vez, é só dizer que troco por um botão único "Sincronizar todas".
+1. **Transformar a agenda de serviço em agenda compartilhada do recrutamento**
+   - Manter agendas OAuth pessoais vinculadas ao próprio usuário.
+   - Permitir que administradores, gerentes de recrutamento e recrutadores autorizados usem a conexão de conta de serviço “Denis Souza” para enviar entrevistas.
+   - Centralizar essa resolução em uma função segura no servidor, sem expor credenciais.
 
-## Detalhes técnicos
+2. **Corrigir o envio ao criar uma entrevista**
+   - Ao salvar uma entrevista por qualquer recrutador, localizar a agenda compartilhada com `sync_out` ativo.
+   - Criar o evento no Google e registrar o vínculo em `google_calendar_events`.
+   - Persistir sucesso ou erro real em `google_calendar_sync_log`.
 
-- Nova server fn `syncNextPendingInterview` em `src/lib/google-calendar.functions.ts` (protegida por `requireSupabaseAuth`): busca em `broker_candidate_interactions` (tipo `entrevista`, `next_follow_up_date >= now()`) a mais antiga sem linha em `google_calendar_events`, e reaproveita a mesma lógica de criação de `createGoogleCalendarEvent` (extraída para um helper compartilhado em `google-calendar.server.ts` para evitar duplicação), com log via `logSync`.
-- Nova server fn `countPendingInterviewSync` (ou o mesmo retorno da consulta) para exibir o contador no botão.
-- UI: botão + área de resultado em `src/components/GoogleCalendarDiagnostics.tsx`, invalidando as queries `gcal-sync-log`, `google-events` e a da agenda após sucesso.
-- Nenhuma alteração de schema; nada do fluxo atual de recrutamento, kanban ou agenda muda.
+3. **Corrigir “Sincronizar agora”**
+   - Recrutador: processar as próprias entrevistas pendentes.
+   - Gerente/admin: processar entrevistas pendentes de toda a equipe.
+   - Usar a agenda compartilhada Denis Souza mesmo quando ela estiver cadastrada por outro administrador.
+   - Mostrar candidato, horário, agenda de destino e eventual mensagem exata do Google.
+
+4. **Evitar duplicações**
+   - Antes de criar, conferir o rastreamento por interação, conexão e agenda.
+   - Não reenviar entrevistas que já tenham evento confirmado.
+   - Se uma tentativa falhar, manter a entrevista como pendente para nova sincronização.
+
+5. **Validar ponta a ponta**
+   - Reenviar uma das entrevistas futuras já existentes.
+   - Confirmar resposta de criação do Google, ID do evento salvo e log de sucesso.
+   - Conferir que o evento aparece na agenda `dacmedia16@gmail.com` e que o contador de pendências diminui.
