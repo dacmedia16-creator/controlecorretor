@@ -263,6 +263,7 @@ function AgendaPage() {
     e.preventDefault();
     const mins = computeDropMinutes(e);
     const newDate = new Date(day);
+    newDate.setHours(0, 0, 0, 0);
     newDate.setMinutes(hourStart * 60 + mins);
     const payload = dragging;
     setDragging(null);
