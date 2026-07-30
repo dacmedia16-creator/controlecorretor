@@ -43,6 +43,7 @@ export function GoogleCalendarBanner() {
       toast.success("Conta Google conectada!");
       qc.invalidateQueries({ queryKey: ["gcal-connections"] });
       qc.invalidateQueries({ queryKey: ["gcal-status"] });
+      qc.invalidateQueries({ queryKey: ["google-events"] });
       navigate({ to: ".", search: {}, replace: true });
     } else if (search.gcal === "error") {
       toast.error(`Falha ao conectar: ${search.reason ?? "erro desconhecido"}`);
