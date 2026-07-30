@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronLeft, ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { whatsappUrl } from "@/lib/constants";
 import { toast } from "sonner";
-import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent, listGoogleEventsRange } from "@/lib/google-calendar.functions";
+import { getMyGoogleCalendarStatus, updateGoogleCalendarEvent, deleteGoogleCalendarEvent, listGoogleEventsRange, patchRawGoogleEvent, deleteRawGoogleEvent } from "@/lib/google-calendar.functions";
 import { GoogleCalendarBanner } from "@/components/GoogleCalendarBanner";
 import { gcalErrorMessage, isGcalReconnectError } from "@/lib/gcal-error";
 import {
