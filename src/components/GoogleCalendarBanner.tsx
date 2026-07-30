@@ -6,9 +6,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, CheckCircle2, Loader2, Plus } from "lucide-react";
+import { Calendar, CheckCircle2, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { gcalErrorMessage } from "@/lib/gcal-error";
+import { ServiceCalendarDialog } from "@/components/ServiceCalendarDialog";
 import {
   startGoogleCalendarConnect,
   listMyGoogleConnections,
@@ -23,7 +24,11 @@ type ConnectionRow = {
   calendar_ids: string[];
   sync_out: boolean;
   sync_in: boolean;
+  auth_type?: string;
+  display_name?: string | null;
+  service_account_email?: string | null;
 };
+
 
 export function GoogleCalendarBanner() {
   const qc = useQueryClient();
