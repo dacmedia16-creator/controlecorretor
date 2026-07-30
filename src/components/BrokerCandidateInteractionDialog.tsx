@@ -40,6 +40,7 @@ export function BrokerCandidateInteractionDialog({
   const [followUp, setFollowUp] = useState("");
   const [durationMin, setDurationMin] = useState(30);
   const [addToCalendar, setAddToCalendar] = useState(true);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const getStatus = useServerFn(getMyGoogleCalendarStatus);
