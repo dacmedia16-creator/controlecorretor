@@ -112,7 +112,7 @@ function AgendaPage() {
     queryFn: () => fetchGoogleEvents({
       data: { startISO: weekStart.toISOString(), endISO: weekEnd.toISOString() },
     }),
-    enabled: (gcalStatus?.accountsCount ?? 0) > 0,
+    enabled: showGoogle && (gcalStatus?.accountsCount ?? 0) > 0,
     staleTime: 60_000,
     retry: false,
   });
