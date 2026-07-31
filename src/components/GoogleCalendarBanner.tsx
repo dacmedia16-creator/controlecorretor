@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, CheckCircle2, Loader2, Plus, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { gcalErrorMessage } from "@/lib/gcal-error";
 import { ServiceCalendarDialog } from "@/components/ServiceCalendarDialog";
@@ -73,25 +73,7 @@ export function GoogleCalendarBanner() {
 
   const serviceDialog = <ServiceCalendarDialog open={serviceOpen} onOpenChange={setServiceOpen} />;
 
-  if (connections.length === 0) {
-    return (
-      <Card className="flex flex-wrap items-center justify-between gap-3 p-3 border-primary/30 bg-primary/5">
-        <div className="flex items-center gap-2 text-sm">
-          <Calendar className="size-4 text-primary" />
-          <span>Conecte uma conta Google para sincronizar as entrevistas com o Google Agenda.</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => connectMut.mutate()} disabled={connectMut.isPending}>
-            {connectMut.isPending ? "Redirecionando…" : "Conectar Google Calendar"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setServiceOpen(true)}>
-            <ShieldCheck className="size-4" /> Agenda de serviço
-          </Button>
-        </div>
-        {serviceDialog}
-      </Card>
-    );
-  }
+  if (connections.length === 0) return null;
 
   return (
     <Card className="space-y-3 p-3 bg-muted/30">
