@@ -118,6 +118,7 @@ function AgendaPage() {
   });
 
   const googleEvents = useMemo<AgendaEvent[]>(() => {
+    if (!showGoogle) return [];
     return (googleQuery.data?.events ?? []).map((e) => {
       // id vem como `${connectionId}:${calendarId}:${googleEventId}`
       const first = e.id.indexOf(":");
