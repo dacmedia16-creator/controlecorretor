@@ -93,6 +93,7 @@ function AgendaPage() {
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   const [dropPreview, setDropPreview] = useState<{ dayIso: string; topPx: number } | null>(null);
   const [view, setView] = useState<"semana" | "lista">("semana");
+  const [showGoogle, setShowGoogle] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const patchEvent = useServerFn(updateGoogleCalendarEvent);
@@ -111,12 +112,13 @@ function AgendaPage() {
     queryFn: () => fetchGoogleEvents({
       data: { startISO: weekStart.toISOString(), endISO: weekEnd.toISOString() },
     }),
-    enabled: (gcalStatus?.accountsCount ?? 0) > 0,
+    enabled: showGoogle && (gcalStatus?.accountsCount ?? 0) > 0,
     staleTime: 60_000,
     retry: false,
   });
 
   const googleEvents = useMemo<AgendaEvent[]>(() => {
+    if (!showGoogle) return [];
     return (googleQuery.data?.events ?? []).map((e) => {
       // id vem como `${connectionId}:${calendarId}:${googleEventId}`
       const first = e.id.indexOf(":");
@@ -142,7 +144,7 @@ function AgendaPage() {
         },
       };
     });
-  }, [googleQuery.data]);
+  }, [googleQuery.data, showGoogle]);
 
 
   const { data: localEvents = [], isLoading } = useQuery({
@@ -398,6 +400,13 @@ function AgendaPage() {
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-amber-500" /> Follow-up candidato</span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-blue-500" /> Follow-up lead</span>
         <div className="ml-auto flex items-center gap-1">
+          <Button
+            size="sm"
+            variant={showGoogle ? "default" : "outline"}
+            onClick={() => setShowGoogle((v) => !v)}
+          >
+            {showGoogle ? "Ocultar Google" : "Mostrar Google"}
+          </Button>
           <Button size="sm" variant={view === "semana" ? "default" : "outline"} onClick={() => setView("semana")}>Semana</Button>
           <Button size="sm" variant={view === "lista" ? "default" : "outline"} onClick={() => setView("lista")}>Lista</Button>
         </div>
