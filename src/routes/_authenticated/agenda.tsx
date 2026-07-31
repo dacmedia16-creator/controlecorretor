@@ -144,7 +144,7 @@ function AgendaPage() {
         },
       };
     });
-  }, [googleQuery.data]);
+  }, [googleQuery.data, showGoogle]);
 
 
   const { data: localEvents = [], isLoading } = useQuery({
