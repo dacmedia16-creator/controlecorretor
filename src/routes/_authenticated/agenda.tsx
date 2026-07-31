@@ -400,6 +400,13 @@ function AgendaPage() {
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-amber-500" /> Follow-up candidato</span>
         <span className="flex items-center gap-1"><span className="inline-block size-3 rounded bg-blue-500" /> Follow-up lead</span>
         <div className="ml-auto flex items-center gap-1">
+          <Button
+            size="sm"
+            variant={showGoogle ? "default" : "outline"}
+            onClick={() => setShowGoogle((v) => !v)}
+          >
+            {showGoogle ? "Ocultar Google" : "Mostrar Google"}
+          </Button>
           <Button size="sm" variant={view === "semana" ? "default" : "outline"} onClick={() => setView("semana")}>Semana</Button>
           <Button size="sm" variant={view === "lista" ? "default" : "outline"} onClick={() => setView("lista")}>Lista</Button>
         </div>
